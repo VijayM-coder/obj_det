@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Loading</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f5f5f5;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      color: #333;
+    }
+    
+    .loading-container {
+      text-align: center;
+      padding: 2rem;
+      background-color: white;
+      border-radius: 8px;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+      max-width: 80%;
+    }
+    
+    h1 {
+      margin-bottom: 1.5rem;
+      color: #2c3e50;
+    }
+    
+    .loading-spinner {
+      display: inline-block;
+      width: 50px;
+      height: 50px;
+      border: 5px solid rgba(0,0,0,0.1);
+      border-radius: 50%;
+      border-top-color: #3498db;
+      animation: spin 1s ease-in-out infinite;
+      margin-bottom: 1.5rem;
+    }
+    
+    .loading-text {
+      font-size: 1.2rem;
+      margin-bottom: 1rem;
+    }
+    
+    .error-message {
+      color: #e74c3c;
+      margin-top: 1rem;
+      display: none;
+    }
+    
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div class="loading-container">
+    <h1>Object Tracking System</h1>
+    <div class="loading-spinner"></div>
+    <div class="loading-text">Connecting to AI Services...</div>
+    <div id="error-message" class="error-message">Failed to connect to AI services. Please restart the application.</div>
+  </div>
+
+  <script>
+    // Check backend status periodically if you want to implement client-side checking
+    // This could be useful if the main process can't redirect automatically
+    const checkBackendStatus = async () => {
+      try {
+        // If your preload script exposes this method
+        const isReady = await window.electron.isBackendReady();
+        if (isReady) {
+          window.location.href = './index.html';
+        }
+      } catch (error) {
+        console.error('Error checking backend status:', error);
+      }
+    };
+
+    // Listen for backend error
+    window.electron.onBackendError((message) => {
+      document.getElementById('error-message').style.display = 'block';
+      document.getElementById('error-message').textContent = message;
+    });
+
+    // Check every second (optional fallback)
+    // setInterval(checkBackendStatus, 1000);
+  </script>
+</body>
+</html>

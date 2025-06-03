@@ -1,0 +1,76 @@
+{
+  "cameras": [
+    {
+      "id": "1",
+      "name": "Front Entrance Camera",
+      "type": "webcam",
+      "source": "0",
+      "resolution": "1920x1080",
+      "fps": 30,
+      "enabled": true,
+      "recording": false,
+      "detection_enabled": true,
+      "alert_threshold": 0.7
+    },
+    {
+      "id": "2", 
+      "name": "Parking Lot Camera",
+      "type": "webcam",
+      "source": "1",
+      "resolution": "1280x720",
+      "fps": 25,
+      "enabled": true,
+      "recording": false,
+      "detection_enabled": true,
+      "alert_threshold": 0.8
+    },
+    {
+      "id": "3",
+      "name": "Back Door Camera",
+      "type": "ip",
+      "source": "rtsp://192.168.1.100:554/stream1",
+      "resolution": "1920x1080",
+      "fps": 30,
+      "enabled": true,
+      "recording": false,
+      "detection_enabled": true,
+      "alert_threshold": 0.6
+    },
+    {
+      "id": "4",
+      "name": "Side Gate Camera",
+      "type": "ip",
+      "source": "http://192.168.1.101:8080/video.mjpg",
+      "resolution": "1280x720",
+      "fps": 20,
+      "enabled": true,
+      "recording": false,
+      "detection_enabled": true,
+      "alert_threshold": 0.75
+    },
+    {
+      "id": "5",
+      "name": "Warehouse Interior",
+      "type": "ip",
+      "source": "rtsp://admin:password@192.168.1.102:554/h264Preview_01_main",
+      "resolution": "1920x1080",
+      "fps": 15,
+      "enabled": true,
+      "recording": true,
+      "detection_enabled": true,
+      "alert_threshold": 0.65
+    },
+    {
+      "id": "6",
+      "name": "Office Area Camera",
+      "type": "webcam",
+      "source": "2",
+      "resolution": "1280x720",
+      "fps": 30,
+      "enabled": false,
+      "recording": false,
+      "detection_enabled": false,
+      "alert_threshold": 0.8
+    }
+  ]
+}

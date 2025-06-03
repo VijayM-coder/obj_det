@@ -1,0 +1,209 @@
+.recordings-panel {
+  background-color: #1e1e1e;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.recordings-header {
+  padding: 16px;
+  background-color: #2a2a2a;
+  border-bottom: 1px solid #3a3a3a;
+}
+
+.recordings-header h2 {
+  margin: 0 0 16px 0;
+  font-size: 1.25rem;
+  color: white;
+}
+
+.filter-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
+.camera-filter, .date-filter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.camera-filter label, .date-filter label {
+  color: #bbb;
+  font-size: 14px;
+}
+
+.camera-filter select, .date-filter input {
+  padding: 8px 12px;
+  background-color: #3a3a3a;
+  color: white;
+  border: none;
+  border-radius: 4px;
+}
+
+.camera-filter select {
+  min-width: 150px;
+}
+
+.refresh-button {
+  padding: 8px 16px;
+  background-color: #2196f3;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-left: auto;
+}
+
+.refresh-button:hover {
+  background-color: #1e88e5;
+}
+
+.refresh-button:disabled {
+  background-color: #666;
+  cursor: not-allowed;
+}
+
+.error-message {
+  padding: 12px 16px;
+  background-color: rgba(244, 67, 54, 0.1);
+  color: #f44336;
+  margin: 16px;
+  border-radius: 4px;
+  border-left: 4px solid #f44336;
+}
+
+.recordings-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+}
+
+.no-recordings {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 200px;
+  color: #bbb;
+}
+
+.recordings-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.recordings-table th,
+.recordings-table td {
+  padding: 12px 16px;
+  text-align: left;
+  border-bottom: 1px solid #3a3a3a;
+}
+
+.recordings-table th {
+  color: #bbb;
+  font-weight: normal;
+  background-color: #2a2a2a;
+}
+
+.recordings-table td {
+  color: white;
+}
+
+.recordings-table tbody tr:hover {
+  background-color: #2a2a2a;
+}
+
+.recordings-table .actions {
+  display: flex;
+  gap: 8px;
+}
+
+.recordings-table .download-button,
+.recordings-table .delete-button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border-radius: 4px;
+}
+
+.recordings-table .download-button:hover {
+  background-color: rgba(33, 150, 243, 0.2);
+}
+
+.recordings-table .delete-button:hover {
+  background-color: rgba(244, 67, 54, 0.2);
+}
+
+@media (max-width: 768px) {
+  .filter-controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .camera-filter, .date-filter {
+    width: 100%;
+  }
+  
+  .camera-filter select, .date-filter input {
+    flex: 1;
+  }
+  
+  .refresh-button {
+    width: 100%;
+    margin-left: 0;
+  }
+  
+  .recordings-table {
+    font-size: 14px;
+  }
+  
+  .recordings-table th,
+  .recordings-table td {
+    padding: 8px;
+  }
+  
+  /* Make the table responsive */
+  .recordings-table thead {
+    display: none;
+  }
+  
+  .recordings-table tbody tr {
+    display: block;
+    margin-bottom: 16px;
+    border: 1px solid #3a3a3a;
+    border-radius: 4px;
+  }
+  
+  .recordings-table tbody td {
+    display: flex;
+    justify-content: space-between;
+    padding: 12px 16px;
+    text-align: right;
+    border-bottom: 1px solid #3a3a3a;
+  }
+  
+  .recordings-table tbody td:before {
+    content: attr(data-label);
+    font-weight: bold;
+    text-align: left;
+    color: #bbb;
+  }
+  
+  .recordings-table tbody td:last-child {
+    border-bottom: none;
+  }
+  
+  .recordings-table .actions {
+    justify-content: flex-end;
+  }
+}

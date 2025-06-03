@@ -1,0 +1,250 @@
+/* StatusBar.css */
+.status-bar {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  border-top: 1px solid rgba(0, 0, 0, 0.1);
+  padding: 8px 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  height: 40px;
+  font-size: 12px;
+  z-index: 100;
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
+}
+
+.status-section {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.status-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.2s;
+}
+
+.status-item:hover {
+  opacity: 0.8;
+}
+
+.status-item.critical {
+  color: #ff3b30;
+  animation: critical-blink 2s infinite;
+}
+
+@keyframes critical-blink {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+.status-label {
+  color: #8e8e93;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.status-value {
+  color: #1d1d1f;
+  font-weight: 600;
+  background: rgba(0, 0, 0, 0.05);
+  padding: 2px 6px;
+  border-radius: 4px;
+  min-width: 20px;
+  text-align: center;
+  transition: all 0.2s;
+}
+
+.status-value.has-alerts {
+  background: rgba(255, 59, 48, 0.1);
+  color: #ff3b30;
+  border: 1px solid rgba(255, 59, 48, 0.2);
+}
+
+.status-value.critical {
+  background: rgba(255, 59, 48, 0.15);
+  color: #ff3b30;
+  border: 1px solid rgba(255, 59, 48, 0.3);
+  animation: pulse-critical 2s infinite;
+}
+
+@keyframes pulse-critical {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+}
+
+.status-value.uptime {
+  font-family: 'Monaco', 'Consolas', 'SF Mono', monospace;
+  background: rgba(0, 122, 255, 0.1);
+  color: #007aff;
+  border: 1px solid rgba(0, 122, 255, 0.2);
+  letter-spacing: 0.5px;
+}
+
+.status-value.time {
+  font-family: 'Monaco', 'Consolas', 'SF Mono', monospace;
+  background: rgba(52, 199, 89, 0.1);
+  color: #34c759;
+  border: 1px solid rgba(52, 199, 89, 0.2);
+  letter-spacing: 0.5px;
+}
+
+.status-indicator {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  animation: pulse-dot 2s infinite;
+}
+
+@keyframes pulse-dot {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.status-text {
+  text-transform: capitalize;
+  font-weight: 500;
+}
+
+.system-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #8e8e93;
+  font-size: 11px;
+}
+
+.app-version {
+  font-weight: 600;
+  background: rgba(0, 0, 0, 0.05);
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: #1d1d1f;
+}
+
+.separator {
+  opacity: 0.5;
+  font-weight: 300;
+}
+
+.system-name {
+  font-weight: 500;
+  font-style: italic;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .status-bar {
+    padding: 6px 16px;
+    height: 36px;
+    font-size: 11px;
+  }
+  
+  .status-section {
+    gap: 12px;
+  }
+  
+  .system-info {
+    display: none;
+  }
+  
+  .status-item {
+    flex-direction: column;
+    gap: 2px;
+    text-align: center;
+  }
+  
+  .status-label {
+    font-size: 9px;
+  }
+  
+  .status-value {
+    font-size: 10px;
+    padding: 1px 4px;
+  }
+}
+
+@media (max-width: 480px) {
+  .status-section {
+    gap: 8px;
+  }
+  
+  .status-item {
+    min-width: 60px;
+  }
+  
+  .status-label {
+    font-size: 8px;
+  }
+  
+  .status-value {
+    font-size: 9px;
+  }
+  
+  .status-value.uptime,
+  .status-value.time {
+    letter-spacing: 0px;
+  }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .status-bar {
+    background: rgba(28, 28, 30, 0.95);
+    border-top-color: rgba(255, 255, 255, 0.1);
+  }
+  
+  .status-label {
+    color: #8e8e93;
+  }
+  
+  .status-value {
+    background: rgba(255, 255, 255, 0.1);
+    color: #f2f2f7;
+  }
+  
+  .app-version {
+    background: rgba(255, 255, 255, 0.1);
+    color: #f2f2f7;
+  }
+  
+  .system-info {
+    color: #8e8e93;
+  }
+}
+
+/* High contrast mode */
+@media (prefers-contrast: high) {
+  .status-bar {
+    border-top: 2px solid #000;
+  }
+  
+  .status-value {
+    border: 1px solid #000;
+  }
+  
+  .status-dot {
+    border: 1px solid #000;
+  }
+}

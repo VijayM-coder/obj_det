@@ -1,0 +1,34 @@
+[
+    {
+        "camera": {
+            "id": "1",
+            "name": "Camera 1",
+            "type": "webcam",
+            "source": "0",
+            "resolution": "1920x1080",
+            "fps": 30,
+            "enabled": true,
+            "recording": false,
+            "detection_enabled": true,
+            "alert_threshold": 0.7,
+            "status": "disconnected"
+        },
+        "model": "yolov8n"
+    },
+    {
+        "camera": {
+            "id": "2",
+            "name": "Camera 2",
+            "type": "webcam",
+            "source": "0",
+            "resolution": "1920x1080",
+            "fps": 30,
+            "enabled": true,
+            "recording": false,
+            "detection_enabled": true,
+            "alert_threshold": 0.7,
+            "status": "connected"
+        },
+        "model": "yolov8n"
+    }
+]

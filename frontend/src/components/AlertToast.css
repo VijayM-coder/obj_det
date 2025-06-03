@@ -1,0 +1,226 @@
+/* AlertToast.css */
+.alert-toast {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  padding: 16px;
+  transform: translateX(100%);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  border-left: 4px solid;
+  animation: slideIn 0.3s ease-out forwards;
+  max-width: 400px;
+  min-width: 320px;
+}
+
+.alert-toast.visible {
+  transform: translateX(0);
+}
+
+.alert-toast.critical {
+  border-left-color: #ff3b30;
+  animation: slideIn 0.3s ease-out forwards, pulse 2s infinite;
+}
+
+.alert-toast.warning {
+  border-left-color: #ff9500;
+}
+
+.alert-toast.info {
+  border-left-color: #34c759;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  }
+  50% {
+    box-shadow: 0 8px 32px rgba(255, 59, 48, 0.4);
+  }
+}
+
+.toast-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.severity-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.severity-icon {
+  font-size: 16px;
+}
+
+.severity-label {
+  font-weight: 600;
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.toast-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.time-left {
+  font-size: 12px;
+  color: #666;
+  background: #f0f0f0;
+  padding: 2px 6px;
+  border-radius: 4px;
+  min-width: 24px;
+  text-align: center;
+}
+
+.close-button {
+  background: none;
+  border: none;
+  font-size: 16px;
+  cursor: pointer;
+  color: #666;
+  padding: 4px;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.close-button:hover {
+  background-color: #f0f0f0;
+}
+
+.toast-content {
+  margin-bottom: 12px;
+}
+
+.alert-main-info {
+  margin-bottom: 8px;
+}
+
+.object-detection {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.object-type {
+  font-weight: 600;
+  font-size: 16px;
+  color: #333;
+}
+
+.confidence-badge {
+  background: #007aff;
+  color: white;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.location-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 14px;
+  color: #666;
+}
+
+.camera-name {
+  font-weight: 500;
+}
+
+.detection-time {
+  font-size: 12px;
+}
+
+.alert-image {
+  margin: 8px 0;
+  border-radius: 8px;
+  overflow: hidden;
+  max-height: 120px;
+}
+
+.alert-image img {
+  width: 100%;
+  height: auto;
+  object-fit: cover;
+}
+
+.toast-buttons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.toast-buttons button {
+  padding: 6px 12px;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.view-button {
+  background: #007aff;
+  color: white;
+}
+
+.view-button:hover {
+  background: #0056b3;
+}
+
+.acknowledge-button {
+  background: #34c759;
+  color: white;
+}
+
+.acknowledge-button:hover {
+  background: #28a745;
+}
+
+.priority-button {
+  background: #ff3b30;
+  color: white;
+  animation: pulse-button 1s infinite;
+}
+
+@keyframes pulse-button {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+}
+
+.progress-bar {
+  height: 3px;
+  background-color: #007aff;
+  border-radius: 2px;
+  transition: width 1s linear;
+  margin-top: 8px;
+}

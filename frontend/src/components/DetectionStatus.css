@@ -1,0 +1,318 @@
+/* DetectionStatus.css */
+.detection-status {
+  background: #ffffff;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  padding: 16px;
+  margin-bottom: 16px;
+  border-left: 4px solid #ddd;
+  transition: all 0.3s ease;
+}
+
+.detection-status.active {
+  border-left-color: #4caf50;
+}
+
+.detection-status.inactive {
+  border-left-color: #ccc;
+  background: #f9f9f9;
+}
+
+.status-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.status-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #333;
+}
+
+.status-badge {
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.status-badge.active {
+  background: #e8f5e8;
+  color: #2d5a2d;
+  border: 1px solid #4caf50;
+}
+
+.status-badge.inactive {
+  background: #f5f5f5;
+  color: #666;
+  border: 1px solid #ccc;
+}
+
+.status-message {
+  color: #666;
+  font-style: italic;
+  margin: 0;
+  text-align: center;
+  padding: 20px;
+}
+
+/* System Health Overview */
+.system-health {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 12px;
+  border-radius: 6px;
+  margin-bottom: 16px;
+}
+
+.health-stats {
+  display: flex;
+  justify-content: space-around;
+  gap: 16px;
+}
+
+.health-item {
+  text-align: center;
+  flex: 1;
+}
+
+.health-label {
+  display: block;
+  font-size: 11px;
+  opacity: 0.8;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.health-value {
+  display: block;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+/* Camera Status */
+.cameras-status h4 {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
+}
+
+.camera-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.camera-status-item {
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 6px;
+  padding: 12px;
+  transition: all 0.2s ease;
+}
+
+.camera-status-item:hover {
+  background: #f1f3f4;
+  border-color: #dee2e6;
+}
+
+.camera-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.camera-name {
+  font-weight: 500;
+  color: #333;
+}
+
+.status-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+}
+
+.status-indicator.status-connected {
+  background: #e8f5e8;
+  color: #2d5a2d;
+}
+
+.status-indicator.status-connecting {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.status-indicator.status-error {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.status-indicator.status-closed {
+  background: #e2e3e5;
+  color: #383d41;
+}
+
+.status-indicator.status-unknown {
+  background: #f8f9fa;
+  color: #6c757d;
+}
+
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: currentColor;
+}
+
+.status-connected .status-dot {
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.camera-details {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.detail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+}
+
+.detail-label {
+  color: #666;
+  font-weight: 500;
+}
+
+.detail-value {
+  color: #333;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.recent-count {
+  color: #ff6b6b;
+  font-weight: 500;
+}
+
+.confidence-badge {
+  color: white;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.camera-warning {
+  background: #fff3cd;
+  color: #856404;
+  padding: 6px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  margin-top: 8px;
+  text-align: center;
+}
+
+/* Performance Metrics */
+.performance-metrics h4 {
+  margin: 16px 0 12px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
+}
+
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+.metric-item {
+  background: #f8f9fa;
+  padding: 12px;
+  border-radius: 6px;
+  text-align: center;
+  border: 1px solid #e9ecef;
+}
+
+.metric-label {
+  display: block;
+  font-size: 11px;
+  color: #666;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.metric-value {
+  display: block;
+  font-size: 16px;
+  font-weight: 600;
+  color: #333;
+}
+
+.metric-value.healthy {
+  color: #28a745;
+}
+
+.metric-value.warning {
+  color: #ffc107;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .health-stats {
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .health-item {
+    text-align: left;
+  }
+  
+  .camera-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  
+  .detail-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  }
+  
+  .metrics-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Animation for new detections */
+@keyframes flash {
+  0%, 100% { background-color: inherit; }
+  50% { background-color: #fff3cd; }
+}
+
+.camera-status-item.new-detection {
+  animation: flash 1s ease-in-out;
+}

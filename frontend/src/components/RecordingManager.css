@@ -1,0 +1,509 @@
+/* src/components/RecordingManager.css */
+
+.recording-manager-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.recording-manager-modal {
+  background: white;
+  border-radius: 12px;
+  width: 100%;
+  max-width: 1200px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+}
+
+/* Header */
+.recording-manager-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  border-bottom: 1px solid #e9ecef;
+  background: #f8f9fa;
+}
+
+.header-left {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.recording-manager-header h2 {
+  margin: 0;
+  color: #212529;
+  font-size: 24px;
+  font-weight: 600;
+}
+
+.global-status {
+  display: flex;
+  gap: 16px;
+  font-size: 14px;
+  color: #6c757d;
+}
+
+.status-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.close-btn {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: #dc3545;
+  color: white;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s;
+}
+
+.close-btn:hover {
+  background: #c82333;
+}
+
+/* Content */
+.recording-manager-content {
+  flex: 1;
+  overflow: auto;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* Filters */
+.filters-section {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 16px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border: 1px solid #e9ecef;
+  flex-wrap: wrap;
+}
+
+.filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 150px;
+}
+
+.filter-group label {
+  font-size: 12px;
+  font-weight: 500;
+  color: #495057;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.filter-group select,
+.filter-group input {
+  padding: 8px 12px;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  background: white;
+  font-size: 14px;
+  color: #495057;
+}
+
+.filter-group select:focus,
+.filter-group input:focus {
+  outline: none;
+  border-color: #007bff;
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+}
+
+.filter-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.clear-filters-btn,
+.refresh-btn {
+  padding: 8px 16px;
+  border: 1px solid #6c757d;
+  background: white;
+  color: #6c757d;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: all 0.2s;
+}
+
+.clear-filters-btn:hover,
+.refresh-btn:hover {
+  background: #6c757d;
+  color: white;
+}
+
+.refresh-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Error Message */
+.error-message {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background: rgba(220, 53, 69, 0.1);
+  border: 1px solid rgba(220, 53, 69, 0.3);
+  border-radius: 6px;
+  color: #721c24;
+}
+
+.error-icon {
+  font-size: 16px;
+}
+
+.dismiss-error {
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: #721c24;
+  cursor: pointer;
+  font-size: 16px;
+  padding: 4px;
+}
+
+/* Loading */
+.loading-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 40px;
+  color: #6c757d;
+}
+
+.loading-spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid #e9ecef;
+  border-top: 2px solid #007bff;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Table */
+.recordings-table-container {
+  overflow-x: auto;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+}
+
+.recordings-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: white;
+}
+
+.recordings-table th {
+  background: #f8f9fa;
+  padding: 12px 16px;
+  text-align: left;
+  font-weight: 600;
+  color: #495057;
+  border-bottom: 2px solid #e9ecef;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.recordings-table th.sortable {
+  cursor: pointer;
+  user-select: none;
+  position: relative;
+  transition: background-color 0.2s;
+}
+
+.recordings-table th.sortable:hover {
+  background: #e9ecef;
+}
+
+.recordings-table th.sortable.sorted-asc::after {
+  content: ' ↑';
+  color: #007bff;
+}
+
+.recordings-table th.sortable.sorted-desc::after {
+  content: ' ↓';
+  color: #007bff;
+}
+
+.recordings-table td {
+  padding: 12px 16px;
+  border-bottom: 1px solid #e9ecef;
+  vertical-align: top;
+}
+
+.recording-row:hover {
+  background: #f8f9fa;
+}
+
+/* Cell Styles */
+.camera-cell .camera-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.camera-name {
+  font-weight: 500;
+  color: #212529;
+}
+
+.camera-id {
+  font-size: 11px;
+  color: #6c757d;
+}
+
+.filename-cell {
+  max-width: 200px;
+}
+
+.filename {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: monospace;
+  font-size: 12px;
+}
+
+.datetime-cell {
+  font-size: 13px;
+  color: #495057;
+  white-space: nowrap;
+}
+
+.duration-cell {
+  font-family: monospace;
+  font-size: 13px;
+  color: #495057;
+}
+
+.size-cell {
+  font-family: monospace;
+  font-size: 13px;
+  color: #495057;
+  text-align: right;
+}
+
+/* Status Badges */
+.status-badge {
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.status-recording {
+  background: rgba(220, 53, 69, 0.1);
+  color: #dc3545;
+  border: 1px solid rgba(220, 53, 69, 0.2);
+  animation: pulse-recording 2s infinite;
+}
+
+.status-completed {
+  background: rgba(40, 167, 69, 0.1);
+  color: #28a745;
+  border: 1px solid rgba(40, 167, 69, 0.2);
+}
+
+.status-error {
+  background: rgba(255, 193, 7, 0.1);
+  color: #856404;
+  border: 1px solid rgba(255, 193, 7, 0.2);
+}
+
+.status-unknown {
+  background: rgba(108, 117, 125, 0.1);
+  color: #6c757d;
+  border: 1px solid rgba(108, 117, 125, 0.2);
+}
+
+@keyframes pulse-recording {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* Action Buttons */
+.action-buttons {
+  display: flex;
+  gap: 4px;
+}
+
+.action-btn {
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.download-btn {
+  background: #007bff;
+  color: white;
+}
+
+.download-btn:hover {
+  background: #0056b3;
+  transform: scale(1.05);
+}
+
+.delete-btn {
+  background: #dc3545;
+  color: white;
+}
+
+.delete-btn:hover {
+  background: #c82333;
+  transform: scale(1.05);
+}
+
+/* Empty State */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  text-align: center;
+  color: #6c757d;
+}
+
+.empty-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+  opacity: 0.5;
+}
+
+.empty-state h3 {
+  margin: 0 0 8px 0;
+  color: #495057;
+}
+
+.empty-state p {
+  margin: 0 0 20px 0;
+  max-width: 400px;
+  line-height: 1.5;
+}
+
+/* Footer */
+.recording-manager-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 24px;
+  border-top: 1px solid #e9ecef;
+  background: #f8f9fa;
+}
+
+.footer-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: #6c757d;
+}
+
+.output-dir {
+  font-family: monospace;
+  font-size: 11px;
+  background: rgba(108, 117, 125, 0.1);
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+
+.close-footer-btn {
+  padding: 8px 20px;
+  border: 1px solid #6c757d;
+  background: white;
+  color: #6c757d;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.close-footer-btn:hover {
+  background: #6c757d;
+  color: white;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .recording-manager-overlay {
+    padding: 10px;
+  }
+  
+  .recording-manager-modal {
+    max-height: 95vh;
+  }
+  
+  .filters-section {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+  
+  .filter-actions {
+    margin-left: 0;
+    justify-content: center;
+  }
+  
+  .recordings-table-container {
+    font-size: 12px;
+  }
+  
+  .recordings-table th,
+  .recordings-table td {
+    padding: 8px 12px;
+  }
+  
+  .filename-cell {
+    max-width: 150px;
+  }
+  
+  .recording-manager-footer {
+    flex-direction: column;
+    gap: 12px;
+    text-align: center;
+  }
+}

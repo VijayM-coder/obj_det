@@ -1,0 +1,476 @@
+/* SecurityDashboard.css */
+.security-dashboard {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  margin-bottom: 16px;
+ 
+}
+
+.security-dashboard.inactive {
+  background: #f8f9fa;
+  color: #666;
+}
+
+.dashboard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 2px solid #f0f0f0;
+}
+
+.dashboard-header h3 {
+  margin: 0;
+  color: #333;
+  font-size: 20px;
+}
+
+.system-status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.status-badge {
+  padding: 4px 12px;
+  border-radius: 16px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.status-badge.active {
+  background: #d4edda;
+  color: #155724;
+}
+
+.status-badge.inactive {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.uptime {
+  font-family: 'Monaco', 'Consolas', monospace;
+  font-size: 14px;
+  color: #666;
+  background: #f0f0f0;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.threat-level-section {
+  margin-bottom: 24px;
+}
+
+.threat-level {
+  border: 2px solid;
+  border-radius: 12px;
+  padding: 16px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(240, 240, 240, 0.9));
+}
+
+.threat-level.low {
+  border-color: #34c759;
+  background: linear-gradient(135deg, rgba(52, 199, 89, 0.1), rgba(52, 199, 89, 0.05));
+}
+
+.threat-level.medium {
+  border-color: #ff9500;
+  background: linear-gradient(135deg, rgba(255, 149, 0, 0.1), rgba(255, 149, 0, 0.05));
+}
+
+.threat-level.high {
+  border-color: #ff3b30;
+  background: linear-gradient(135deg, rgba(255, 59, 48, 0.1), rgba(255, 59, 48, 0.05));
+}
+
+.threat-indicator {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.threat-bar {
+  width: 60px;
+  height: 8px;
+  border-radius: 4px;
+}
+
+.threat-label {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.critical-warning {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #ff3b30;
+  font-weight: 500;
+  animation: warning-pulse 2s infinite;
+}
+
+@keyframes warning-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.metric-card {
+  background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid #e9ecef;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.metric-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+}
+
+.metric-icon {
+  font-size: 24px;
+  opacity: 0.8;
+}
+
+.metric-content {
+  display: flex;
+  flex-direction: column;
+}
+
+.metric-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: #333;
+  line-height: 1;
+}
+
+.metric-label {
+  font-size: 12px;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-top: 4px;
+}
+
+.camera-status-section {
+  margin-bottom: 24px;
+}
+
+.camera-status-section h4 {
+  margin: 0 0 12px 0;
+  color: #333;
+  font-size: 16px;
+}
+
+.camera-status-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 12px;
+}
+
+.camera-status-card {
+  background: white;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  padding: 12px;
+  transition: border-color 0.2s;
+}
+
+.camera-status-card.connected {
+  border-left: 4px solid #34c759;
+}
+
+.camera-status-card.disconnected {
+  border-left: 4px solid #ff3b30;
+}
+
+.camera-status-card.error {
+  border-left: 4px solid #ff9500;
+}
+
+.camera-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.camera-name {
+  font-weight: 500;
+  color: #333;
+}
+
+.status-indicator {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.status-indicator.connected .status-dot {
+  background: #34c759;
+}
+
+.status-indicator.disconnected .status-dot {
+  background: #ff3b30;
+}
+
+.status-indicator.error .status-dot {
+  background: #ff9500;
+}
+
+.camera-details {
+  font-size: 12px;
+  color: #666;
+}
+
+.model-info {
+  background: #f0f0f0;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.activity-feed-section {
+  margin-bottom: 24px;
+}
+
+.activity-feed-section h4 {
+  margin: 0 0 12px 0;
+  color: #333;
+  font-size: 16px;
+}
+
+.activity-feed {
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  background: #f8f9fa;
+}
+
+.no-activity {
+  padding: 24px;
+  text-align: center;
+  color: #666;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.activity-icon {
+  font-size: 24px;
+}
+
+.activity-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-bottom: 1px solid #e9ecef;
+  background: white;
+  transition: background-color 0.2s;
+}
+
+.activity-item:hover {
+  background: #f8f9fa;
+}
+
+.activity-item:last-child {
+  border-bottom: none;
+}
+
+.activity-item.critical {
+  border-left: 4px solid #ff3b30;
+}
+
+.activity-item.warning {
+  border-left: 4px solid #ff9500;
+}
+
+.activity-item.info {
+  border-left: 4px solid #34c759;
+}
+
+.activity-item .activity-icon {
+  font-size: 16px;
+}
+
+.activity-content {
+  flex: 1;
+}
+
+.activity-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.activity-main .object-type {
+  font-weight: 500;
+  color: #333;
+}
+
+.activity-main .camera-name {
+  color: #666;
+  font-size: 14px;
+}
+
+.activity-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+  color: #666;
+}
+
+.confidence {
+  background: #007aff;
+  color: white;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.security-zones-section {
+  margin-bottom: 24px;
+}
+
+.security-zones-section h4 {
+  margin: 0 0 12px 0;
+  color: #333;
+  font-size: 16px;
+}
+
+.zones-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+.zone-card {
+  background: white;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.zone-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.zone-name {
+  font-weight: 500;
+  color: #333;
+}
+
+.zone-status.secure {
+  background: #d4edda;
+  color: #155724;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+}
+
+.zone-cameras {
+  font-size: 12px;
+  color: #666;
+}
+
+.quick-actions-section h4 {
+  margin: 0 0 12px 0;
+  color: #333;
+  font-size: 16px;
+}
+
+.action-buttons {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+}
+
+.action-button {
+  padding: 8px 12px;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.action-button.emergency {
+  background: #ff3b30;
+  color: white;
+}
+
+.action-button.patrol {
+  background: #007aff;
+  color: white;
+}
+
+.action-button.silence {
+  background: #ff9500;
+  color: white;
+}
+
+.action-button.report {
+  background: #34c759;
+  color: white;
+}
+
+.action-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.inactive-message {
+  text-align: center;
+  padding: 40px;
+  color: #666;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .metrics-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  
+  .camera-status-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .dashboard-header {
+    flex-direction: column;
+    gap: 12px;
+    align-items: stretch;
+  }
+}
