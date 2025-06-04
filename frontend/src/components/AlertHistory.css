@@ -684,6 +684,7 @@
 
 /* Alert History Styles */
 .alert-history {
+  overflow: auto;
   background: white;
   border-radius: 12px;
   padding: 20px;
