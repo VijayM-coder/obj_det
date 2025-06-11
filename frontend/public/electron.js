@@ -47,9 +47,9 @@ function createWindow() {
   mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
     console.error('Electron failed to load page:', errorCode, errorDescription);
   });
-
+checkBackendConnection()
   // Start FastAPI Backend
-  startBackend();
+  // startBackend();
 }
 
 function startBackend() {

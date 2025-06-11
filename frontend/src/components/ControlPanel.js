@@ -39,6 +39,10 @@ const ControlPanel = ({
     { id: 'yolov8s', name: 'YOLOv8 Small' },
     { id: 'yolov8m', name: 'YOLOv8 Medium' },
     { id: 'yolov8l', name: 'YOLOv8 Large' },
+    { id: 'custom1', name: 'YOLOv8 custom1' },
+    { id: 'custom2', name: 'YOLOv8 custom2' },
+    { id: 'custom3', name: 'YOLOv8 custom3' },
+    { id: 'custom4', name: 'YOLOv8 custom4' },
   ];
 
   // Toggle panel expansion

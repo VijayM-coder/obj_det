@@ -11,18 +11,7 @@
       "recording": false,
       "detection_enabled": true,
       "alert_threshold": 0.7
-    },
-    {
-      "id": "2",
-      "name": "Camera 2",
-      "type": "webcam",
-      "source": "0",
-      "resolution": "1920x1080",
-      "fps": 30,
-      "enabled": true,
-      "recording": false,
-      "detection_enabled": true,
-      "alert_threshold": 0.5
     }
+
   ]
 }

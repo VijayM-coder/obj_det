@@ -417,19 +417,36 @@ function App() {
     setCameraModelPairs(prevPairs => [...prevPairs, enhancedPair]);
   };
 
-  const removeCameraModelPair = (cameraId) => {
-    console.log('➖ Removing camera-model pair for camera:', cameraId);
+ 
+
+
+  // In App.js, change this function to accept pairId instead of cameraId
+  const removeCameraModelPair = (pairId) => {
+    console.log('➖ Removing camera-model pair with pairId:', pairId);
     setCameraModelPairs(prevPairs => 
-      prevPairs.filter(pair => pair.camera.id !== cameraId)
+      prevPairs.filter(pair => {
+        const currentPairId = pair.pairId || `${pair.camera.id}_${pair.model}_${pair.addedAt || Date.now()}`;
+        return currentPairId !== pairId;
+      })
     );
     
-    const wasTracking = trackingPairs.some(tp => tp.cameraId === cameraId);
-    if (wasTracking) {
-      console.log(`🔌 Disconnecting WebSocket for removed camera ${cameraId}`);
-      disconnectAlertWebSocket(cameraId);
+    // Find the pair being removed to get camera info for WebSocket cleanup
+    const pairToRemove = cameraModelPairs.find(pair => {
+      const currentPairId = pair.pairId || `${pair.camera.id}_${pair.model}_${pair.addedAt || Date.now()}`;
+      return currentPairId === pairId;
+    });
+    
+    if (pairToRemove) {
+      const wasTracking = trackingPairs.some(tp => 
+        tp.cameraId === pairToRemove.camera.id && tp.model === pairToRemove.model
+      );
+      
+      if (wasTracking) {
+        console.log(`🔌 Disconnecting WebSocket for removed pair ${pairId}`);
+        disconnectAlertWebSocket(pairToRemove.camera.id);
+      }
     }
   };
-
   // Enhanced tracking controls with scenario support
   const handleStartTracking = async () => {
     try {
