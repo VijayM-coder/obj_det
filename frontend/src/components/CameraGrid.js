@@ -14,7 +14,69 @@ function CameraGrid({
   const streamErrorTimers = useRef({});
   const [streamStatus, setStreamStatus] = useState({});
   const [cameraStats, setCameraStats] = useState({});
+    const [selectedImg, setSelectedImg] = useState(null); // For fullview modal
+    const [isFullviewOpen, setIsFullviewOpen] = useState(false);
+  const fullviewImgRef = useRef(null);
   const { rows, cols } = gridLayout;
+
+    // Handle fullview modal
+  const handleFullView = (pairId) => {
+    const pair = cameraModelPairs.find(p => 
+      (p.pairId || `${p.camera.id}_${p.model}_${cameraModelPairs.indexOf(p)}`) === pairId
+    );
+    if (pair) {
+      setSelectedImg({ pairId, pair });
+      setIsFullviewOpen(true);
+    }
+  };
+
+  const closeFullView = () => {
+    setIsFullviewOpen(false);
+    setSelectedImg(null);
+    if (fullviewImgRef.current) {
+      fullviewImgRef.current.src = '';
+      fullviewImgRef.current.onload = null;
+      fullviewImgRef.current.onerror = null;
+    }
+  };
+
+// Setup fullview stream when modal opens
+  useEffect(() => {
+    if (isFullviewOpen && selectedImg && fullviewImgRef.current) {
+      const { pairId, pair } = selectedImg;
+      const camera = pair.camera;
+      const imgElement = fullviewImgRef.current;
+      
+      // Find if this specific camera-model pair is in tracking mode
+      const isTracking = trackingPairs.some(tp => 
+        tp.cameraId === camera.id && tp.model === pair.model
+      );
+      
+      const model = isTracking 
+        ? trackingPairs.find(tp => tp.cameraId === camera.id && tp.model === pair.model)?.model 
+        : pair.model;
+      
+      // Add timestamp to prevent caching
+      const timestamp = Date.now();
+      
+      // Set appropriate stream URL
+      const streamUrl = isTracking
+        ? `http://localhost:8001/api/cameras/${camera.id}/detection_stream?model=${model}&pair_id=${pairId}&session=fullview_${pairId}&t=${timestamp}`
+        : `http://localhost:8001/api/cameras/${camera.id}/stream?pair_id=${pairId}&session=fullview_${pairId}&t=${timestamp}`;
+      
+      console.log(`Setting fullview stream URL for camera ${camera.id} (${model}):`, streamUrl);
+      
+      imgElement.onload = () => {
+        console.log(`Fullview stream loaded for camera ${camera.id}`);
+      };
+      
+      imgElement.onerror = (error) => {
+        console.warn(`Fullview stream error for camera ${camera.id}:`, error);
+      };
+      
+      imgElement.src = streamUrl;
+    }
+  }, [isFullviewOpen, selectedImg, trackingPairs]);
 
   // Clean up any pending timers when component unmounts
   useEffect(() => {
@@ -255,6 +317,8 @@ function CameraGrid({
     height: '100%'
   };
 
+
+
   return (
     <div className="enhanced-camera-grid-container">
       <div className="camera-grid" style={gridStyle}>
@@ -287,12 +351,26 @@ function CameraGrid({
                 }`}
               >
                 {/* Camera Feed */}
-                <img 
+                
+              <img 
                   ref={(el) => (imgRefs.current[pairId] = el)} // ✅ Use unique pairId for ref
                   alt={`Camera ${pair.camera.name || cameraId} - ${getModelName(pair.model)}`} 
                   className="camera-feed"
+                   onClick={() => handleFullView(pairId)} // ✅ Enable click handler
+                  style={{ cursor: 'pointer' }}
                 />
-                
+             
+               {/* Fullview Button Overlay */}
+                <div className="fullview-overlay" onClick={() => handleFullView(pairId)}>
+                  <div className="fullview-button">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
+                    </svg>
+                    <span>Full View</span>
+                  </div>
+                </div>
+   
+
                 {/* Loading indicator */}
                 {streamStatus[pairId]?.loading && (
                   <div className="stream-overlay loading">
@@ -311,9 +389,10 @@ function CameraGrid({
                 )}
                 
                 {/* Camera Information Overlay */}
+                
                 <div className="camera-info-overlay">
                   <div className="camera-header">
-                    <span className="camera-name">
+                    <span className="camera-name-grid">
                       {pair.camera.name || `Camera ${cameraId}`}
                       {totalInstances > 1 && (
                         <span className="instance-indicator">#{instanceNumber}</span>
@@ -401,6 +480,131 @@ function CameraGrid({
           );
         })}
       </div>
+
+ {/* Fullview Modal */}
+      {isFullviewOpen && selectedImg && (
+        <div className="fullview-modal" onClick={closeFullView}>
+          <div className="fullview-content" onClick={(e) => e.stopPropagation()}>
+            {/* Modal Header */}
+            <div className="fullview-header">
+              <div className="fullview-title">
+                <h2>{selectedImg.pair.camera.name || `Camera ${selectedImg.pair.camera.id}`}</h2>
+                <span className="fullview-model">{getModelName(selectedImg.pair.model)}</span>
+              </div>
+              
+              <div className="fullview-controls">
+                <button 
+                  className="fullview-close-btn"
+                  onClick={closeFullView}
+                  title="Close (ESC)"
+                >
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                  </svg>
+                </button>
+              </div>
+            </div>
+            
+            {/* Modal Body */}
+            <div className="fullview-body">
+              <div className="fullview-video-container">
+                <img 
+                  ref={fullviewImgRef}
+                  alt={`Full view of ${selectedImg.pair.camera.name || selectedImg.pair.camera.id}`}
+                  className="fullview-video"
+                />
+                
+                {/* Fullview Info Overlay */}
+                <div className="fullview-info-overlay">
+                  <div className="fullview-status">
+                    <div className={`connection-status ${getCameraStatus(selectedImg.pairId, selectedImg.pair.camera.id)}`}>
+                      <span className="status-dot"></span>
+                      <span className="status-text">
+                        {getCameraStatus(selectedImg.pairId, selectedImg.pair.camera.id).toUpperCase()}
+                      </span>
+                    </div>
+                    
+                    {trackingPairs.some(tp => tp.cameraId === selectedImg.pair.camera.id && tp.model === selectedImg.pair.model) && (
+                      <div className="tracking-status active">
+                        <span className="tracking-icon">🎯</span>
+                        <span>AI TRACKING ACTIVE</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+              
+              {/* Fullview Stats Panel */}
+              {/* <div className="fullview-stats-panel">
+                <div className="stats-header">
+                  <h3>Camera Statistics</h3>
+                </div>
+                
+                <div className="stats-grid">
+                  <div className="stat-item">
+                    <span className="stat-labels">Camera ID:</span>
+                    <span className="stat-value">{selectedImg.pair.camera.id}</span>
+                  </div>
+                  
+                  <div className="stat-item">
+                    <span className="stat-labels">Model:</span>
+                    <span className="stat-value">{getModelName(selectedImg.pair.model)}</span>
+                  </div>
+                  
+                  <div className="stat-item">
+                    <span className="stat-labels">Resolution:</span>
+                    <span className="stat-value">1920×1080</span>
+                  </div>
+                  
+                  <div className="stat-item">
+                    <span className="stat-labels">Status:</span>
+                    <span className={`stat-value status-${getCameraStatus(selectedImg.pairId, selectedImg.pair.camera.id)}`}>
+                      {getCameraStatus(selectedImg.pairId, selectedImg.pair.camera.id).toUpperCase()}
+                    </span>
+                  </div>
+                  
+                  {cameraStats[selectedImg.pair.camera.id] && (
+                    <>
+                      <div className="stat-item">
+                        <span className="stat-label">Total Detections:</span>
+                        <span className="stat-value">{cameraStats[selectedImg.pair.camera.id].totalDetections}</span>
+                      </div>
+                      
+                      <div className="stat-item">
+                        <span className="stat-label">Recent Detections:</span>
+                        <span className="stat-value">{cameraStats[selectedImg.pair.camera.id].recentDetections}</span>
+                      </div>
+                      
+                      {cameraStats[selectedImg.pair.camera.id].lastDetection && (
+                        <div className="stat-item full-width">
+                          <span className="stat-label">Last Detection:</span>
+                          <span className="stat-value">
+                            {formatLastDetection(cameraStats[selectedImg.pair.camera.id].lastDetection)}
+                          </span>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div> */}
+            </div>
+            
+            {/* Modal Footer */}
+            {/* <div className="fullview-footer">
+              <div className="fullview-hint">
+                <span>Press ESC to close or click outside the modal</span>
+              </div>
+            </div> */}
+          </div>
+        </div>
+      )}
+
+
+
+
+
+
       
       {/* Empty State */}
       {cameraModelPairs.length === 0 && (
