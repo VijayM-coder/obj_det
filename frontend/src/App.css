@@ -355,7 +355,7 @@ html, body {
 
 /* Left Sidebar */
 .left-sidebar {
-  width: 320px;
+  width: 340px;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -544,7 +544,7 @@ html, body {
 
 /* Right Sidebar */
 .right-sidebar {
-  width: 78%;
+  width: 77%;
   display: flex;
   flex-direction: column;
   gap: 12px;

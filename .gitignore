@@ -7,5 +7,5 @@ frontend/models/
 *.log
 services/env/
 *.pt
-
+models/
 __pycache__

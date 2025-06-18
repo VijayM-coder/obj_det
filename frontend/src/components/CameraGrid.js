@@ -488,8 +488,8 @@ function CameraGrid({
             {/* Modal Header */}
             <div className="fullview-header">
               <div className="fullview-title">
-                <h2>{selectedImg.pair.camera.name || `Camera ${selectedImg.pair.camera.id}`}</h2>
-                <span className="fullview-model">{getModelName(selectedImg.pair.model)}</span>
+                <h2>{selectedImg.pair.camera.name || `Camera ${selectedImg.pair.camera.id}`}<span className="fullview-model">{getModelName(selectedImg.pair.model)}</span>
+</h2>
               </div>
               
               <div className="fullview-controls">
@@ -498,7 +498,7 @@ function CameraGrid({
                   onClick={closeFullView}
                   title="Close (ESC)"
                 >
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <line x1="18" y1="6" x2="6" y2="18"></line>
                     <line x1="6" y1="6" x2="18" y2="18"></line>
                   </svg>

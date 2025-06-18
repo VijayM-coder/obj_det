@@ -751,7 +751,7 @@ function App() {
           <div className="header-actions">
             <button 
               className={`header-action-btn ${showControlPanel ? 'active' : ''}`}
-              onClick={() => togglePanel('control')}
+              // onClick={() => togglePanel('control')}
               title="Toggle Control Panel"
             >
               ⚙️
