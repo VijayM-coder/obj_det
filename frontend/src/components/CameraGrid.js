@@ -1,5 +1,5 @@
-// Fixed CameraGrid.js - Support Multiple Camera Instances with Different Models
-import React, { useEffect, useRef, useState } from 'react';
+// Enhanced CameraGrid.js - Electron Fullview Integration
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import './CameraGrid.css';
 
 function CameraGrid({ 
@@ -14,23 +14,81 @@ function CameraGrid({
   const streamErrorTimers = useRef({});
   const [streamStatus, setStreamStatus] = useState({});
   const [cameraStats, setCameraStats] = useState({});
-    const [selectedImg, setSelectedImg] = useState(null); // For fullview modal
-    const [isFullviewOpen, setIsFullviewOpen] = useState(false);
+  const [selectedImg, setSelectedImg] = useState(null);
+  const [isFullviewOpen, setIsFullviewOpen] = useState(false);
+  const [activeFullviewWindows, setActiveFullviewWindows] = useState([]);
   const fullviewImgRef = useRef(null);
   const { rows, cols } = gridLayout;
 
-    // Handle fullview modal
-  const handleFullView = (pairId) => {
+  // Enhanced fullview handler with Electron support
+  const handleFullView = useCallback(async (pairId) => {
     const pair = cameraModelPairs.find(p => 
       (p.pairId || `${p.camera.id}_${p.model}_${cameraModelPairs.indexOf(p)}`) === pairId
     );
-    if (pair) {
-      setSelectedImg({ pairId, pair });
-      setIsFullviewOpen(true);
-    }
-  };
+    
+    if (!pair) return;
 
-  const closeFullView = () => {
+    // Check if Electron fullview is available
+    if (window.electron?.openFullview) {
+      try {
+        const isTracking = trackingPairs.some(tp => 
+          tp.cameraId === pair.camera.id && tp.model === pair.model
+        );
+        
+        const timestamp = Date.now();
+        const streamUrl = isTracking
+          ? `http://localhost:8001/api/cameras/${pair.camera.id}/detection_stream?model=${pair.model}&pair_id=${pairId}&session=fullview_${pairId}&t=${timestamp}`
+          : `http://localhost:8001/api/cameras/${pair.camera.id}/stream?pair_id=${pairId}&session=fullview_${pairId}&t=${timestamp}`;
+
+        console.log(`🪟 Opening Electron fullview window for camera ${pair.camera.id}`);
+        
+        const result = await window.electron.openFullview({
+          camera: pair.camera,
+          model: pair.model,
+          streamUrl: streamUrl,
+          pairId: pairId,
+          isTracking: isTracking
+        });
+        
+        if (result.success) {
+          console.log('✅ Fullview window opened:', result.windowId);
+          
+          // Update active windows list
+          setActiveFullviewWindows(prev => [...prev, {
+            id: result.windowId,
+            cameraId: pair.camera.id,
+            pairId: pairId,
+            cameraName: pair.camera.name,
+            model: pair.model
+          }]);
+          
+          // Play success sound if available
+          if (window.electron.playBeep) {
+            window.electron.playBeep();
+          }
+        } else {
+          console.warn('⚠️ Failed to open Electron fullview, falling back to modal');
+          openModalFullview(pairId, pair);
+        }
+      } catch (error) {
+        console.error('❌ Electron fullview error:', error);
+        openModalFullview(pairId, pair);
+      }
+    } else {
+      // Fallback to modal fullview
+      console.log('📱 Using modal fullview (Electron not available)');
+      openModalFullview(pairId, pair);
+    }
+  }, [cameraModelPairs, trackingPairs]);
+
+  // Fallback modal fullview
+  const openModalFullview = useCallback((pairId, pair) => {
+    setSelectedImg({ pairId, pair });
+    setIsFullviewOpen(true);
+  }, []);
+
+  // Close modal fullview
+  const closeFullView = useCallback(() => {
     setIsFullviewOpen(false);
     setSelectedImg(null);
     if (fullviewImgRef.current) {
@@ -38,16 +96,131 @@ function CameraGrid({
       fullviewImgRef.current.onload = null;
       fullviewImgRef.current.onerror = null;
     }
-  };
+  }, []);
 
-// Setup fullview stream when modal opens
+  // Listen for Electron fullview window events
+  useEffect(() => {
+    if (window.electron?.on) {
+      const handleWindowClosed = (windowId) => {
+        console.log('🔒 Fullview window closed:', windowId);
+        setActiveFullviewWindows(prev => prev.filter(w => w.id !== windowId));
+      };
+
+      const handleWindowCreated = (windowData) => {
+        console.log('🆕 Fullview window created:', windowData);
+        // Window data will be added when handleFullView succeeds
+      };
+
+      window.electron.on('fullview-window-closed', handleWindowClosed);
+      window.electron.on('fullview-window-created', handleWindowCreated);
+
+      // Cleanup listeners
+      return () => {
+        if (window.electron.removeListener) {
+          window.electron.removeListener('fullview-window-closed', handleWindowClosed);
+          window.electron.removeListener('fullview-window-created', handleWindowCreated);
+        }
+      };
+    }
+  }, []);
+
+  // Load existing fullview windows on mount
+  useEffect(() => {
+    const loadActiveWindows = async () => {
+      if (window.electron?.getFullviewWindows) {
+        try {
+          const windows = await window.electron.getFullviewWindows();
+          setActiveFullviewWindows(windows);
+          console.log('📋 Loaded active fullview windows:', windows.length);
+        } catch (error) {
+          console.warn('Failed to load active windows:', error);
+        }
+      }
+    };
+
+    loadActiveWindows();
+  }, []);
+
+  // Enhanced keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Only handle if not typing in an input
+      if (e.target.tagName.toLowerCase() === 'input') return;
+      
+      // ESC to close modal
+      if (e.key === 'Escape' && isFullviewOpen) {
+        closeFullView();
+        return;
+      }
+      
+      // Ctrl/Cmd + number keys to open specific camera fullview
+      if ((e.ctrlKey || e.metaKey) && !isNaN(parseInt(e.key)) && e.key !== '0') {
+        const index = parseInt(e.key) - 1;
+        if (index < cameraModelPairs.length) {
+          e.preventDefault();
+          const pair = cameraModelPairs[index];
+          const pairId = pair.pairId || `${pair.camera.id}_${pair.model}_${index}`;
+          handleFullView(pairId);
+        }
+      }
+      
+      // Ctrl/Cmd + A to open all cameras (if Electron available)
+      if ((e.ctrlKey || e.metaKey) && e.key === 'a' && window.electron?.openFullview) {
+        e.preventDefault();
+        openAllCameras();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [isFullviewOpen, cameraModelPairs, handleFullView, closeFullView]);
+
+  // Open all cameras in separate windows
+  const openAllCameras = useCallback(async () => {
+    if (!window.electron?.openFullview) {
+      console.warn('Electron fullview not available for batch operation');
+      return;
+    }
+
+    console.log('🎬 Opening all cameras in separate windows...');
+    
+    for (const [index, pair] of cameraModelPairs.entries()) {
+      const pairId = pair.pairId || `${pair.camera.id}_${pair.model}_${index}`;
+      await handleFullView(pairId);
+      // Small delay to prevent overwhelming the system
+      await new Promise(resolve => setTimeout(resolve, 200));
+    }
+  }, [cameraModelPairs, handleFullView]);
+
+  // Close all fullview windows
+  const closeAllWindows = useCallback(async () => {
+    if (!window.electron?.closeFullview) return;
+
+    console.log('🔒 Closing all fullview windows...');
+    
+    for (const window of activeFullviewWindows) {
+      try {
+        await window.electron.closeFullview(window.id);
+      } catch (error) {
+        console.warn('Failed to close window:', window.id, error);
+      }
+    }
+  }, [activeFullviewWindows]);
+
+  // Check if camera has active fullview window
+  const hasActiveFullview = useCallback((cameraId, model) => {
+    return activeFullviewWindows.some(w => 
+      w.cameraId === cameraId && w.model === model
+    );
+  }, [activeFullviewWindows]);
+
+  // Setup fullview stream when modal opens
   useEffect(() => {
     if (isFullviewOpen && selectedImg && fullviewImgRef.current) {
       const { pairId, pair } = selectedImg;
       const camera = pair.camera;
       const imgElement = fullviewImgRef.current;
       
-      // Find if this specific camera-model pair is in tracking mode
       const isTracking = trackingPairs.some(tp => 
         tp.cameraId === camera.id && tp.model === pair.model
       );
@@ -56,22 +229,19 @@ function CameraGrid({
         ? trackingPairs.find(tp => tp.cameraId === camera.id && tp.model === pair.model)?.model 
         : pair.model;
       
-      // Add timestamp to prevent caching
       const timestamp = Date.now();
-      
-      // Set appropriate stream URL
       const streamUrl = isTracking
-        ? `http://localhost:8001/api/cameras/${camera.id}/detection_stream?model=${model}&pair_id=${pairId}&session=fullview_${pairId}&t=${timestamp}`
-        : `http://localhost:8001/api/cameras/${camera.id}/stream?pair_id=${pairId}&session=fullview_${pairId}&t=${timestamp}`;
+        ? `http://localhost:8001/api/cameras/${camera.id}/detection_stream?model=${model}&pair_id=${pairId}&session=modal_${pairId}&t=${timestamp}`
+        : `http://localhost:8001/api/cameras/${camera.id}/stream?pair_id=${pairId}&session=modal_${pairId}&t=${timestamp}`;
       
-      console.log(`Setting fullview stream URL for camera ${camera.id} (${model}):`, streamUrl);
+      console.log(`Setting modal fullview stream URL for camera ${camera.id} (${model}):`, streamUrl);
       
       imgElement.onload = () => {
-        console.log(`Fullview stream loaded for camera ${camera.id}`);
+        console.log(`Modal fullview stream loaded for camera ${camera.id}`);
       };
       
       imgElement.onerror = (error) => {
-        console.warn(`Fullview stream error for camera ${camera.id}:`, error);
+        console.warn(`Modal fullview stream error for camera ${camera.id}:`, error);
       };
       
       imgElement.src = streamUrl;
@@ -102,7 +272,6 @@ function CameraGrid({
       const imgElement = imgRefs.current[pairId];
       
       if (imgElement) {
-        // Find if this specific camera-model pair is in tracking mode
         const isTracking = trackingPairs.some(tp => 
           tp.cameraId === camera.id && tp.model === pair.model
         );
@@ -111,16 +280,12 @@ function CameraGrid({
           ? trackingPairs.find(tp => tp.cameraId === camera.id && tp.model === pair.model)?.model 
           : pair.model;
         
-        // Set loading state for this specific pair
         setStreamStatus(prev => ({
           ...prev,
           [pairId]: { loading: true, error: false, lastUpdate: Date.now() }
         }));
         
-        // Add timestamp to prevent caching
         const timestamp = Date.now();
-        
-        // Set appropriate stream URL - use unique URL for each model
         const streamUrl = isTracking
           ? `http://localhost:8001/api/cameras/${camera.id}/detection_stream?model=${model}&pair_id=${pairId}&session=${pairId}&t=${timestamp}`
           : `http://localhost:8001/api/cameras/${camera.id}/stream?pair_id=${pairId}&session=${pairId}&t=${timestamp}`;
@@ -128,7 +293,6 @@ function CameraGrid({
         console.log(`Setting stream URL for camera ${camera.id} (${model}):`, streamUrl);
         imgElement.src = streamUrl;
         
-        // Handle successful load
         imgElement.onload = () => {
           console.log(`Stream loaded successfully for camera ${camera.id} with model ${model}`);
           setStreamStatus(prev => ({
@@ -142,7 +306,6 @@ function CameraGrid({
           }));
         };
         
-        // Handle stream errors with exponential backoff
         imgElement.onerror = (error) => {
           console.warn(`Stream error for camera ${camera.id} (${model}):`, error);
           setStreamStatus(prev => ({
@@ -155,16 +318,13 @@ function CameraGrid({
             }
           }));
           
-          // Clear any existing timer for this pair
           if (streamErrorTimers.current[pairId]) {
             clearTimeout(streamErrorTimers.current[pairId]);
           }
           
-          // Set new reconnection timer with exponential backoff
           const retryDelay = Math.min(2000 * Math.pow(2, (prev?.[pairId]?.retryCount || 0)), 30000);
           
           streamErrorTimers.current[pairId] = setTimeout(() => {
-            // Only attempt reconnection if component is still mounted
             if (imgElement && imgRefs.current[pairId]) {
               const newTimestamp = Date.now();
               console.log(`Retrying connection for camera ${camera.id} (${model})`);
@@ -190,7 +350,6 @@ function CameraGrid({
       }
     });
 
-    // Cleanup function to stop all streams when component updates or unmounts
     return () => {
       cameraModelPairs.forEach((pair, index) => {
         const pairId = pair.pairId || `${pair.camera.id}_${pair.model}_${index}`;
@@ -201,7 +360,6 @@ function CameraGrid({
           imgElement.src = '';
         }
         
-        // Clear any pending reconnection timers
         if (streamErrorTimers.current[pairId]) {
           clearTimeout(streamErrorTimers.current[pairId]);
           delete streamErrorTimers.current[pairId];
@@ -219,8 +377,6 @@ function CameraGrid({
 
     const fetchStats = async () => {
       const stats = {};
-      
-      // Fetch stats for each unique camera (not each pair)
       const uniqueCameras = [...new Set(cameraModelPairs.map(p => p.camera.id))];
       
       for (const cameraId of uniqueCameras) {
@@ -244,16 +400,13 @@ function CameraGrid({
       setCameraStats(stats);
     };
 
-    // Initial fetch
     fetchStats();
-    
-    // Set up periodic updates
-    const statsInterval = setInterval(fetchStats, 5000); // Every 5 seconds
+    const statsInterval = setInterval(fetchStats, 5000);
     
     return () => clearInterval(statsInterval);
   }, [isTrackingActive, cameraModelPairs]);
 
-  // Get model name for display
+  // Utility functions
   const getModelName = (modelId) => {
     const modelMap = {
       'yolov8n': 'YOLOv8 Nano',
@@ -264,7 +417,6 @@ function CameraGrid({
     return modelMap[modelId] || modelId;
   };
 
-  // Get camera status for specific pair
   const getCameraStatus = (pairId, cameraId) => {
     const stream = streamStatus[pairId];
     const stats = cameraStats[cameraId];
@@ -276,7 +428,6 @@ function CameraGrid({
     return 'disconnected';
   };
 
-  // Get alert severity for camera
   const getAlertSeverity = (cameraId) => {
     if (!alertedCameras.has(cameraId)) return null;
     
@@ -285,7 +436,6 @@ function CameraGrid({
       const confidence = stats.lastDetection.confidence;
       const objectType = stats.lastDetection.class_name?.toLowerCase();
       
-      // Determine severity based on object type and confidence
       if (objectType === 'person' && confidence >= 0.85) return 'critical';
       if ((objectType === 'person' && confidence >= 0.7) || 
           ['car', 'truck', 'motorcycle'].includes(objectType)) return 'warning';
@@ -294,7 +444,6 @@ function CameraGrid({
     return 'info';
   };
 
-  // Format last detection time
   const formatLastDetection = (lastDetection) => {
     if (!lastDetection) return 'No recent detections';
     
@@ -307,7 +456,6 @@ function CameraGrid({
     }
   };
 
-  // Calculate grid layout styles
   const gridStyle = {
     display: 'grid',
     gridTemplateColumns: `repeat(${cols}, 1fr)`,
@@ -317,10 +465,66 @@ function CameraGrid({
     height: '100%'
   };
 
-
-
   return (
     <div className="enhanced-camera-grid-container">
+      {/* Enhanced Fullview Controls Bar */}
+      {(activeFullviewWindows.length > 0 || window.electron?.openFullview) && (
+        <div className="fullview-controls-bar" style={{
+          position: 'absolute',
+          top: '10px',
+          right: '10px',
+          zIndex: 1000,
+          display: 'flex',
+          gap: '8px',
+          padding: '8px',
+          background: 'rgba(0, 0, 0, 0.7)',
+          borderRadius: '6px',
+          fontSize: '12px'
+        }}>
+          {window.electron?.openFullview && (
+            <button
+              onClick={openAllCameras}
+              disabled={cameraModelPairs.length === 0}
+              style={{
+                background: 'rgba(33, 150, 243, 0.8)',
+                border: 'none',
+                color: 'white',
+                padding: '6px 10px',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '11px'
+              }}
+              title="Open all cameras in separate windows (Ctrl+A)"
+            >
+              🪟 Open All ({cameraModelPairs.length})
+            </button>
+          )}
+          
+          {activeFullviewWindows.length > 0 && (
+            <>
+              <span style={{ color: 'white', alignSelf: 'center' }}>
+                {activeFullviewWindows.length} window{activeFullviewWindows.length > 1 ? 's' : ''} open
+              </span>
+              <button
+                onClick={closeAllWindows}
+                style={{
+                  background: 'rgba(244, 67, 54, 0.8)',
+                  border: 'none',
+                  color: 'white',
+                  padding: '6px 10px',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '11px'
+                }}
+                title="Close all fullview windows"
+              >
+                ✕ Close All
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
       <div className="camera-grid" style={gridStyle}>
         {cameraModelPairs.map((pair, index) => {
           const cameraId = pair.camera.id;
@@ -332,8 +536,8 @@ function CameraGrid({
           const isAlerted = alertedCameras.has(cameraId);
           const alertSeverity = getAlertSeverity(cameraId);
           const stats = cameraStats[cameraId];
+          const hasFullview = hasActiveFullview(cameraId, pair.model);
           
-          // Count instances of this camera
           const instanceNumber = cameraModelPairs
             .filter(p => p.camera.id === cameraId)
             .indexOf(pair) + 1;
@@ -342,34 +546,68 @@ function CameraGrid({
           
           return (
             <div 
-              key={pairId} // ✅ Use unique pairId instead of cameraId
-              className={`camera-cell ${status} ${isAlerted && flashEnabled ? 'alerted' : ''}`}
+              key={pairId}
+              className={`camera-cell ${status} ${isAlerted && flashEnabled ? 'alerted' : ''} ${hasFullview ? 'has-fullview' : ''}`}
             >
               <div 
                 className={`camera-frame ${
                   isAlerted && flashEnabled ? `${alertSeverity}-alert` : ''
                 }`}
               >
-                {/* Camera Feed */}
-                
-              <img 
-                  ref={(el) => (imgRefs.current[pairId] = el)} // ✅ Use unique pairId for ref
+                <img 
+                  ref={(el) => (imgRefs.current[pairId] = el)}
                   alt={`Camera ${pair.camera.name || cameraId} - ${getModelName(pair.model)}`} 
                   className="camera-feed"
-                   onClick={() => handleFullView(pairId)} // ✅ Enable click handler
+                  onClick={() => handleFullView(pairId)}
                   style={{ cursor: 'pointer' }}
                 />
              
-               {/* Fullview Button Overlay */}
+                {/* Enhanced Fullview Button Overlay */}
                 <div className="fullview-overlay" onClick={() => handleFullView(pairId)}>
                   <div className="fullview-button">
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                       <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
                     </svg>
-                    <span>Full View</span>
+                    <span>
+                      {window.electron?.openFullview ? 'Open Window' : 'Full View'}
+                      {hasFullview && ' (Open)'}
+                    </span>
                   </div>
                 </div>
-   
+
+                {/* Fullview Status Indicator */}
+                {hasFullview && (
+                  <div className="fullview-status-indicator" style={{
+                    position: 'absolute',
+                    top: '8px',
+                    right: '8px',
+                    background: 'rgba(76, 175, 80, 0.9)',
+                    color: 'white',
+                    padding: '4px 8px',
+                    borderRadius: '4px',
+                    fontSize: '10px',
+                    fontWeight: 'bold'
+                  }}>
+                    🪟 WINDOW OPEN
+                  </div>
+                )}
+
+                {/* Keyboard Shortcut Hint */}
+                {index < 9 && (
+                  <div className="keyboard-hint" style={{
+                    position: 'absolute',
+                    top: '8px',
+                    left: '8px',
+                    background: 'rgba(0, 0, 0, 0.7)',
+                    color: 'white',
+                    padding: '2px 6px',
+                    borderRadius: '3px',
+                    fontSize: '10px',
+                    opacity: 0.7
+                  }}>
+                    Ctrl+{index + 1}
+                  </div>
+                )}
 
                 {/* Loading indicator */}
                 {streamStatus[pairId]?.loading && (
@@ -389,7 +627,6 @@ function CameraGrid({
                 )}
                 
                 {/* Camera Information Overlay */}
-                
                 <div className="camera-info-overlay">
                   <div className="camera-header">
                     <span className="camera-name-grid">
@@ -481,18 +718,47 @@ function CameraGrid({
         })}
       </div>
 
- {/* Fullview Modal */}
+      {/* Enhanced Fullview Modal (Fallback) */}
       {isFullviewOpen && selectedImg && (
         <div className="fullview-modal" onClick={closeFullView}>
           <div className="fullview-content" onClick={(e) => e.stopPropagation()}>
-            {/* Modal Header */}
             <div className="fullview-header">
               <div className="fullview-title">
-                <h2>{selectedImg.pair.camera.name || `Camera ${selectedImg.pair.camera.id}`}<span className="fullview-model">{getModelName(selectedImg.pair.model)}</span>
-</h2>
+                <h2>
+                  {selectedImg.pair.camera.name || `Camera ${selectedImg.pair.camera.id}`}
+                  <span className="fullview-model">{getModelName(selectedImg.pair.model)}</span>
+                </h2>
+                {!window.electron?.openFullview && (
+                  <small style={{ color: '#888', fontSize: '12px' }}>
+                    Modal Mode (Electron window not available)
+                  </small>
+                )}
               </div>
               
               <div className="fullview-controls">
+                {window.electron?.openFullview && (
+                  <button 
+                    className="fullview-detach-btn"
+                    onClick={() => {
+                      closeFullView();
+                      setTimeout(() => handleFullView(selectedImg.pairId), 100);
+                    }}
+                    title="Open in separate window"
+                    style={{
+                      background: 'rgba(33, 150, 243, 0.2)',
+                      border: '1px solid rgba(33, 150, 243, 0.5)',
+                      color: 'white',
+                      padding: '6px 12px',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                      fontSize: '12px',
+                      marginRight: '8px'
+                    }}
+                  >
+                    🪟 Detach
+                  </button>
+                )}
+                
                 <button 
                   className="fullview-close-btn"
                   onClick={closeFullView}
@@ -506,7 +772,6 @@ function CameraGrid({
               </div>
             </div>
             
-            {/* Modal Body */}
             <div className="fullview-body">
               <div className="fullview-video-container">
                 <img 
@@ -515,7 +780,6 @@ function CameraGrid({
                   className="fullview-video"
                 />
                 
-                {/* Fullview Info Overlay */}
                 <div className="fullview-info-overlay">
                   <div className="fullview-status">
                     <div className={`connection-status ${getCameraStatus(selectedImg.pairId, selectedImg.pair.camera.id)}`}>
@@ -531,81 +795,97 @@ function CameraGrid({
                         <span>AI TRACKING ACTIVE</span>
                       </div>
                     )}
+                    
+                    {/* Modal-specific status */}
+                    <div className="modal-status" style={{
+                      background: 'rgba(156, 39, 176, 0.8)',
+                      color: 'white',
+                      padding: '4px 8px',
+                      borderRadius: '4px',
+                      fontSize: '11px'
+                    }}>
+                      📱 MODAL VIEW
+                    </div>
                   </div>
                 </div>
-              </div>
-              
-              {/* Fullview Stats Panel */}
-              {/* <div className="fullview-stats-panel">
-                <div className="stats-header">
-                  <h3>Camera Statistics</h3>
-                </div>
-                
-                <div className="stats-grid">
-                  <div className="stat-item">
-                    <span className="stat-labels">Camera ID:</span>
-                    <span className="stat-value">{selectedImg.pair.camera.id}</span>
-                  </div>
-                  
-                  <div className="stat-item">
-                    <span className="stat-labels">Model:</span>
-                    <span className="stat-value">{getModelName(selectedImg.pair.model)}</span>
-                  </div>
-                  
-                  <div className="stat-item">
-                    <span className="stat-labels">Resolution:</span>
-                    <span className="stat-value">1920×1080</span>
-                  </div>
-                  
-                  <div className="stat-item">
-                    <span className="stat-labels">Status:</span>
-                    <span className={`stat-value status-${getCameraStatus(selectedImg.pairId, selectedImg.pair.camera.id)}`}>
-                      {getCameraStatus(selectedImg.pairId, selectedImg.pair.camera.id).toUpperCase()}
-                    </span>
-                  </div>
-                  
-                  {cameraStats[selectedImg.pair.camera.id] && (
-                    <>
-                      <div className="stat-item">
-                        <span className="stat-label">Total Detections:</span>
-                        <span className="stat-value">{cameraStats[selectedImg.pair.camera.id].totalDetections}</span>
-                      </div>
-                      
-                      <div className="stat-item">
-                        <span className="stat-label">Recent Detections:</span>
-                        <span className="stat-value">{cameraStats[selectedImg.pair.camera.id].recentDetections}</span>
-                      </div>
-                      
-                      {cameraStats[selectedImg.pair.camera.id].lastDetection && (
-                        <div className="stat-item full-width">
-                          <span className="stat-label">Last Detection:</span>
-                          <span className="stat-value">
-                            {formatLastDetection(cameraStats[selectedImg.pair.camera.id].lastDetection)}
-                          </span>
-                        </div>
-                      )}
-                    </>
+
+                {/* Enhanced Modal Controls */}
+                <div className="modal-controls" style={{
+                  position: 'absolute',
+                  bottom: '20px',
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                  display: 'flex',
+                  gap: '8px',
+                  background: 'rgba(0, 0, 0, 0.7)',
+                  padding: '8px 12px',
+                  borderRadius: '6px'
+                }}>
+                  {window.electron?.takeScreenshot && (
+                    <button
+                      onClick={() => window.electron.takeScreenshot()}
+                      style={{
+                        background: 'rgba(76, 175, 80, 0.2)',
+                        border: '1px solid rgba(76, 175, 80, 0.5)',
+                        color: 'white',
+                        padding: '6px 10px',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        fontSize: '11px'
+                      }}
+                      title="Take Screenshot"
+                    >
+                      📸 Screenshot
+                    </button>
                   )}
+                  
+                  <button
+                    onClick={() => {
+                      // Take manual screenshot as fallback
+                      const canvas = document.createElement('canvas');
+                      const video = fullviewImgRef.current;
+                      if (video) {
+                        canvas.width = video.naturalWidth || 1920;
+                        canvas.height = video.naturalHeight || 1080;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(video, 0, 0);
+                        
+                        const link = document.createElement('a');
+                        link.download = `camera_${selectedImg.pair.camera.id}_${Date.now()}.png`;
+                        link.href = canvas.toDataURL();
+                        link.click();
+                      }
+                    }}
+                    style={{
+                      background: 'rgba(255, 152, 0, 0.2)',
+                      border: '1px solid rgba(255, 152, 0, 0.5)',
+                      color: 'white',
+                      padding: '6px 10px',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                      fontSize: '11px'
+                    }}
+                    title="Save Image"
+                  >
+                    💾 Save
+                  </button>
+                  
+                  <span style={{
+                    color: 'white',
+                    fontSize: '10px',
+                    alignSelf: 'center',
+                    padding: '0 8px',
+                    borderLeft: '1px solid rgba(255, 255, 255, 0.3)'
+                  }}>
+                    ESC to close
+                  </span>
                 </div>
-              </div> */}
-            </div>
-            
-            {/* Modal Footer */}
-            {/* <div className="fullview-footer">
-              <div className="fullview-hint">
-                <span>Press ESC to close or click outside the modal</span>
               </div>
-            </div> */}
+            </div>
           </div>
         </div>
       )}
 
-
-
-
-
-
-      
       {/* Empty State */}
       {cameraModelPairs.length === 0 && (
         <div className="no-cameras-message">
@@ -635,6 +915,26 @@ function CameraGrid({
               <span>Start tracking to begin monitoring</span>
             </div>
           </div>
+          
+          {/* Enhanced setup info for Electron */}
+          {window.electron?.openFullview && (
+            <div className="electron-features" style={{
+              marginTop: '20px',
+              padding: '16px',
+              background: 'rgba(33, 150, 243, 0.1)',
+              borderRadius: '8px',
+              border: '1px solid rgba(33, 150, 243, 0.3)'
+            }}>
+              <h4 style={{ color: '#2196F3', margin: '0 0 8px 0' }}>🪟 Enhanced Desktop Features</h4>
+              <ul style={{ fontSize: '14px', color: '#666', margin: 0, paddingLeft: '20px' }}>
+                <li>Open cameras in separate windows</li>
+                <li>Multi-monitor support</li>
+                <li>Keyboard shortcuts (Ctrl+1-9)</li>
+                <li>Native screenshots and recording</li>
+                <li>Always-on-top windows</li>
+              </ul>
+            </div>
+          )}
         </div>
       )}
       
@@ -652,6 +952,14 @@ function CameraGrid({
               {new Set(cameraModelPairs.map(p => p.camera.id)).size}
             </span>
           </div>
+          
+          {/* Fullview windows stats */}
+          {activeFullviewWindows.length > 0 && (
+            <div className="stats-section">
+              <span className="stats-label">Fullview Windows:</span>
+              <span className="stats-value">{activeFullviewWindows.length}</span>
+            </div>
+          )}
           
           {isTrackingActive && (
             <>
@@ -680,6 +988,33 @@ function CameraGrid({
             <span className="stats-label">Layout:</span>
             <span className="stats-value">{rows}×{cols}</span>
           </div>
+
+          {/* Desktop mode indicator */}
+          {window.electron?.openFullview && (
+            <div className="stats-section">
+              <span className="stats-label">Mode:</span>
+              <span className="stats-value" style={{ color: '#2196F3' }}>🪟 Desktop</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Help overlay for keyboard shortcuts */}
+      {cameraModelPairs.length > 0 && window.electron?.openFullview && (
+        <div className="keyboard-help" style={{
+          position: 'absolute',
+          bottom: '10px',
+          left: '10px',
+          background: 'rgba(0, 0, 0, 0.7)',
+          color: 'white',
+          padding: '8px 12px',
+          borderRadius: '6px',
+          fontSize: '11px',
+          opacity: 0.8,
+          zIndex: 1000
+        }}>
+          <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>🔧 Shortcuts:</div>
+          <div>Ctrl+1-9: Open camera • Ctrl+A: Open all • ESC: Close modal</div>
         </div>
       )}
     </div>

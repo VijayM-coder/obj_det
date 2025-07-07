@@ -5,7 +5,9 @@ frontend/models/
 # Ignore environment variables
 # Ignore logs
 *.log
+services/venv/
 services/env/
 *.pt
 models/
 __pycache__
+__init__.py

@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 # Database configuration
 DATABASE_URL = os.getenv(
     "DATABASE_URL", 
-    "mysql+pymysql://root:1278@localhost:3306/camera_detection_db"
+    "mysql+pymysql://gigapp:password@localhost:3306/camera_detection_db"
 )
 
 # Create engine with connection pooling

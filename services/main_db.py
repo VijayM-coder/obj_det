@@ -11,7 +11,7 @@ import asyncio
 import threading
 import time
 import os
-import uuid
+import uuid,random
 from datetime import datetime, timedelta
 import torch
 from ultralytics import YOLO
@@ -65,6 +65,122 @@ MAX_WORKERS = 8
 os.makedirs(MODELS_DIR, exist_ok=True)
 os.makedirs(RECORDINGS_DIR, exist_ok=True)
 
+def draw_yolo_detections(frame: np.ndarray, detections: List[Dict], model_id: str = "") -> np.ndarray:
+    """
+    Draw YOLO-style detection boxes on frame
+    
+    Args:
+        frame: Input image frame
+        detections: List of detection dictionaries
+        model_id: Model identifier for labeling
+    
+    Returns:
+        Frame with drawn detection boxes
+    """
+    if not detections:
+        return frame
+    
+    # YOLO class colors (similar to official YOLO colors)
+    colors = [
+        (255, 0, 0),     # Red
+        (0, 255, 0),     # Green  
+        (0, 0, 255),     # Blue
+        (255, 255, 0),   # Yellow
+        (255, 0, 255),   # Magenta
+        (0, 255, 255),   # Cyan
+        (255, 165, 0),   # Orange
+        (128, 0, 128),   # Purple
+        (255, 192, 203), # Pink
+        (0, 128, 0),     # Dark Green
+        (128, 128, 0),   # Olive
+        (0, 0, 128),     # Navy
+        (128, 0, 0),     # Maroon
+        (0, 128, 128),   # Teal
+        (192, 192, 192), # Silver
+        (255, 20, 147),  # Deep Pink
+        (50, 205, 50),   # Lime Green
+        (255, 140, 0),   # Dark Orange
+        (30, 144, 255),  # Dodger Blue
+        (220, 20, 60)    # Crimson
+    ]
+    
+    frame_height, frame_width = frame.shape[:2]
+    
+    for detection in detections:
+        try:
+            # Extract detection data
+            bbox = detection["bbox"]
+            confidence = detection["confidence"]
+            class_name = detection["class_name"]
+            class_id = detection.get("class_id", 0)
+            
+            # Get coordinates and ensure they're within frame bounds
+            x1, y1, x2, y2 = map(int, bbox)
+            x1 = max(0, min(x1, frame_width - 1))
+            y1 = max(0, min(y1, frame_height - 1))
+            x2 = max(x1 + 1, min(x2, frame_width))
+            y2 = max(y1 + 1, min(y2, frame_height))
+            
+            # Skip invalid boxes
+            if x2 <= x1 or y2 <= y1:
+                continue
+            
+            # Get color for this class
+            color = colors[class_id % len(colors)]
+            
+            # Draw bounding box
+            thickness = max(1, int((frame_width + frame_height) / 600))  # Scale thickness with frame size
+            cv2.rectangle(frame, (x1, y1), (x2, y2), color, thickness)
+            
+            # Prepare label text
+            label = f"{class_name} {confidence:.2f}"
+            if model_id:
+                label += f" [{model_id}]"
+            
+            # Calculate text size and position
+            font = cv2.FONT_HERSHEY_SIMPLEX
+            font_scale = max(0.4, min(0.8, (frame_width + frame_height) / 2000))  # Scale font with frame size
+            text_thickness = max(1, thickness // 2)
+            
+            (text_width, text_height), baseline = cv2.getTextSize(label, font, font_scale, text_thickness)
+            
+            # Position label above the box, or below if not enough space
+            label_y = y1 - 10 if y1 - text_height - 10 > 0 else y2 + text_height + 10
+            label_x = x1
+            
+            # Ensure label doesn't go outside frame
+            if label_x + text_width > frame_width:
+                label_x = frame_width - text_width
+            if label_y < text_height:
+                label_y = text_height
+            if label_y > frame_height - 5:
+                label_y = frame_height - 5
+            
+            # Draw label background
+            bg_x1 = label_x - 2
+            bg_y1 = label_y - text_height - 2
+            bg_x2 = label_x + text_width + 2
+            bg_y2 = label_y + baseline + 2
+            
+            # Ensure background coordinates are valid
+            bg_x1 = max(0, bg_x1)
+            bg_y1 = max(0, bg_y1)
+            bg_x2 = min(frame_width, bg_x2)
+            bg_y2 = min(frame_height, bg_y2)
+            
+            if bg_x2 > bg_x1 and bg_y2 > bg_y1:
+                cv2.rectangle(frame, (bg_x1, bg_y1), (bg_x2, bg_y2), color, -1)
+            
+            # Draw label text
+            text_color = (255, 255, 255) if sum(color) < 400 else (0, 0, 0)  # White text on dark colors, black on light
+            cv2.putText(frame, label, (label_x, label_y), font, font_scale, text_color, text_thickness)
+            
+        except Exception as e:
+            logger.error(f"Error drawing detection box: {e}")
+            continue
+    
+    return frame
+
 class DetectionSession:
     """Enhanced detection session with database integration"""
     def __init__(self, session_id: str, camera_id: str, model_id: str, model: YOLO, db_session_id: str):
@@ -72,13 +188,17 @@ class DetectionSession:
         self.camera_id = camera_id
         self.model_id = model_id
         self.model = model
-        self.db_session_id = db_session_id  # Store session ID instead of object
+        self.db_session_id = db_session_id
         self.active = True
         self.detection_queue = queue.Queue(maxsize=5)
         self.detections = []
         self.processing_thread = None
         self.websocket_clients = []
-        self.error_count = 0  # Track errors locally
+        self.error_count = 0
+        
+        # NEW: Store latest annotated frame
+        self.latest_annotated_frame = None
+        self.frame_lock = threading.Lock()
         
     def start_processing(self, camera_manager):
         """Start the detection processing thread for this session"""
@@ -97,97 +217,358 @@ class DetectionSession:
             self.processing_thread.join(timeout=2)
         logger.info(f"Stopped detection processing for session {self.session_id}")
 
+
+    # def _process_detections(self, camera_manager):
+    #     """Process detections and draw directly on frames"""
+    #     logger.info(f"🚀 Detection processing started for session {self.session_id}")
+    #     frame_count = 0
+        
+    #     while self.active:
+    #         try:
+    #             if not self.detection_queue.empty():
+    #                 frame, timestamp = self.detection_queue.get_nowait()
+    #                 frame_count += 1
+                    
+    #                 start_time = time.time()
+                    
+    #                 # Ensure model is loaded
+    #                 if not self.model:
+    #                     logger.error(f"❌ Model not loaded for session {self.session_id}")
+    #                     continue
+                    
+    #                 # Run YOLO detection
+    #                 try:
+    #                     results = self.model.predict(
+    #                         [frame], 
+    #                         conf=0.3,        # Confidence threshold
+    #                         iou=0.5,         # IoU threshold for NMS
+    #                         verbose=False,
+    #                         save=False,
+    #                         show=False
+    #                     )
+    #                     inference_time = time.time() - start_time
+                        
+    #                 except Exception as pred_error:
+    #                     logger.error(f"❌ YOLO prediction error: {pred_error}")
+    #                     continue
+                    
+    #                 # Create annotated frame directly
+    #                 annotated_frame = frame.copy()
+    #                 detection_count = 0
+                    
+    #                 # YOLO class colors
+    #                 colors = [
+    #                     (0, 255, 0),     # Green
+    #                     (255, 0, 0),     # Red (BGR format for OpenCV)
+    #                     (0, 0, 255),     # Blue
+    #                     (255, 255, 0),   # Yellow
+    #                     (255, 0, 255),   # Magenta
+    #                     (0, 255, 255),   # Cyan
+    #                     (255, 165, 0),   # Orange
+    #                     (128, 0, 128),   # Purple
+    #                 ]
+                    
+    #                 # Process YOLO results and draw immediately
+    #                 for result in results:
+    #                     boxes = result.boxes
+    #                     if boxes is not None and len(boxes) > 0:
+    #                         # Get all detection data
+    #                         xyxy = boxes.xyxy.cpu().numpy()  # Bounding boxes
+    #                         conf = boxes.conf.cpu().numpy()  # Confidence scores
+    #                         cls = boxes.cls.cpu().numpy()    # Class IDs
+                            
+    #                         # Draw each detection immediately
+    #                         for i in range(len(xyxy)):
+    #                             x1, y1, x2, y2 = xyxy[i]
+    #                             confidence = float(conf[i])
+    #                             class_id = int(cls[i])
+    #                             class_name = result.names[class_id]
+                                
+    #                             # Ensure valid bounding box
+    #                             if x2 > x1 and y2 > y1 and confidence > 0.1:
+    #                                 detection_count += 1
+                                    
+    #                                 # Convert coordinates to integers
+    #                                 x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2)
+                                    
+    #                                 # Get color for this class
+    #                                 color = colors[class_id % len(colors)]
+                                    
+    #                                 # Draw bounding box with thick lines
+    #                                 thickness = 3
+    #                                 cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), color, thickness)
+                                    
+    #                                 # Prepare label text
+    #                                 label = f"{class_name} {confidence:.2f}"
+                                    
+    #                                 # Calculate text size
+    #                                 font = cv2.FONT_HERSHEY_SIMPLEX
+    #                                 font_scale = 0.7
+    #                                 text_thickness = 2
+    #                                 (text_width, text_height), baseline = cv2.getTextSize(
+    #                                     label, font, font_scale, text_thickness)
+                                    
+    #                                 # Position label above the box
+    #                                 label_x = x1
+    #                                 label_y = y1 - 10 if y1 > text_height + 10 else y2 + text_height + 10
+                                    
+    #                                 # Draw label background
+    #                                 bg_x1 = label_x - 2
+    #                                 bg_y1 = label_y - text_height - 2
+    #                                 bg_x2 = label_x + text_width + 2
+    #                                 bg_y2 = label_y + baseline + 2
+                                    
+    #                                 cv2.rectangle(annotated_frame, (bg_x1, bg_y1), (bg_x2, bg_y2), color, -1)
+                                    
+    #                                 # Draw label text
+    #                                 text_color = (255, 255, 255)  # White text
+    #                                 cv2.putText(annotated_frame, label, (label_x, label_y), 
+    #                                           font, font_scale, text_color, text_thickness)
+                    
+    #                 if detection_count > 0:
+    #                     logger.info(f"🎯 Drew {detection_count} bounding boxes directly on frame #{frame_count}")
+                    
+    #                 # Store the annotated frame
+    #                 with self.frame_lock:
+    #                     self.latest_annotated_frame = annotated_frame
+                    
+    #                 # Update camera manager with annotated frame
+    #                 camera_manager.camera_frames[f"{self.camera_id}_annotated"] = annotated_frame
+                    
+    #                 # Store detection data for database (optional)
+    #                 try:
+    #                     with get_db_session() as db:
+    #                         for result in results:
+    #                             boxes = result.boxes
+    #                             if boxes is not None:
+    #                                 xyxy = boxes.xyxy.cpu().numpy()
+    #                                 conf = boxes.conf.cpu().numpy()
+    #                                 cls = boxes.cls.cpu().numpy()
+                                    
+    #                                 for i in range(len(xyxy)):
+    #                                     x1, y1, x2, y2 = xyxy[i]
+    #                                     confidence = float(conf[i])
+    #                                     class_id = int(cls[i])
+    #                                     class_name = result.names[class_id]
+                                        
+    #                                     if confidence > 0.3:  # Only store confident detections
+    #                                         detection_create = DetectionCreate(
+    #                                             session_id=self.session_id,
+    #                                             camera_id=self.camera_id,
+    #                                             model_id=self.model_id,
+    #                                             bbox=[float(x1), float(y1), float(x2), float(y2)],
+    #                                             confidence=confidence,
+    #                                             class_id=class_id,
+    #                                             class_name=class_name,
+    #                                             frame_width=frame.shape[1],
+    #                                             frame_height=frame.shape[0],
+    #                                             frame_timestamp=datetime.fromtimestamp(timestamp),
+    #                                             inference_time=inference_time
+    #                                         )
+    #                                         DetectionService.create_detection(db, detection_create)
+    #                 except Exception as db_error:
+    #                     logger.debug(f"Database save error (non-critical): {db_error}")
+                    
+    #             else:
+    #                 time.sleep(0.01)
+                    
+    #         except Exception as e:
+    #             logger.error(f"❌ Error in detection session {self.session_id}: {e}")
+    #             time.sleep(0.1)
+
     def _process_detections(self, camera_manager):
-        """Process detections for this specific session with database storage"""
+        """Process detections and draw directly on frames WITH ALERT FUNCTIONALITY"""
+        logger.info(f"🚀 Detection processing started for session {self.session_id}")
+        frame_count = 0
+        
         while self.active:
             try:
                 if not self.detection_queue.empty():
                     frame, timestamp = self.detection_queue.get_nowait()
+                    frame_count += 1
                     
                     start_time = time.time()
-                    # Run detection with this session's model
-                    results = self.model.predict([frame], conf=0.25, verbose=False)
-                    inference_time = time.time() - start_time
+                    
+                    # Ensure model is loaded
+                    if not self.model:
+                        logger.error(f"❌ Model not loaded for session {self.session_id}")
+                        continue
+                    
+                    # Run YOLO detection
+                    try:
+                        results = self.model.predict(
+                            [frame], 
+                            conf=0.3,        # Confidence threshold
+                            iou=0.5,         # IoU threshold for NMS
+                            verbose=False,
+                            save=False,
+                            show=False
+                        )
+                        inference_time = time.time() - start_time
+                        
+                    except Exception as pred_error:
+                        logger.error(f"❌ YOLO prediction error: {pred_error}")
+                        continue
+                    
+                    # Create annotated frame directly
+                    annotated_frame = frame.copy()
+                    detection_count = 0
+                    
+                    # YOLO class colors
+                    colors = [
+                        (0, 255, 0),     # Green
+                        (255, 0, 0),     # Red (BGR format for OpenCV)
+                        (0, 0, 255),     # Blue
+                        (255, 255, 0),   # Yellow
+                        (255, 0, 255),   # Magenta
+                        (0, 255, 255),   # Cyan
+                        (255, 165, 0),   # Orange
+                        (128, 0, 128),   # Purple
+                    ]
                     
                     # Get camera from database
                     with get_db_session() as db:
                         db_camera = CameraService.get_camera(db, self.camera_id)
-                        if not db_camera or not db_camera.detection_enabled:
+                        if not db_camera:
                             continue
                         
                         detections = []
+                        
+                        # Process YOLO results and draw immediately
                         for result in results:
                             boxes = result.boxes
-                            if boxes is not None:
-                                for box in boxes:
-                                    x1, y1, x2, y2 = box.xyxy[0].tolist()
-                                    confidence = box.conf.item()
-                                    class_id = int(box.cls.item())
+                            if boxes is not None and len(boxes) > 0:
+                                # Get all detection data
+                                xyxy = boxes.xyxy.cpu().numpy()  # Bounding boxes
+                                conf = boxes.conf.cpu().numpy()  # Confidence scores
+                                cls = boxes.cls.cpu().numpy()    # Class IDs
+                                
+                                # Draw each detection immediately
+                                for i in range(len(xyxy)):
+                                    x1, y1, x2, y2 = xyxy[i]
+                                    confidence = float(conf[i])
+                                    class_id = int(cls[i])
                                     class_name = result.names[class_id]
                                     
-                                    # Create detection object for API response
-                                    detection_data = {
-                                        "bbox": [x1, y1, x2, y2],
-                                        "confidence": confidence,
-                                        "class_id": class_id,
-                                        "class_name": class_name,
-                                        "timestamp": datetime.fromtimestamp(timestamp).isoformat(),
-                                        "model": self.model_id,
-                                        "session_id": self.session_id
-                                    }
-                                    detections.append(detection_data)
-                                    
-                                    # Store detection in database
-                                    detection_create = DetectionCreate(
-                                        session_id=self.session_id,
-                                        camera_id=self.camera_id,
-                                        model_id=self.model_id,
-                                        bbox=[x1, y1, x2, y2],
-                                        confidence=confidence,
-                                        class_id=class_id,
-                                        class_name=class_name,
-                                        frame_width=frame.shape[1],
-                                        frame_height=frame.shape[0],
-                                        frame_timestamp=datetime.fromtimestamp(timestamp),
-                                        inference_time=inference_time
-                                        # Note: meta_data is optional and not set here
-                                    )
-                                    
-                                    db_detection = DetectionService.create_detection(db, detection_create)
-                                    
-                                    # Send alert if confidence exceeds threshold
-                                    if confidence > db_camera.alert_threshold:
-                                        self._send_alert(camera_manager, detection_data, frame, db, db_detection.id)
+                                    # Ensure valid bounding box
+                                    if x2 > x1 and y2 > y1 and confidence > 0.1:
+                                        detection_count += 1
+                                        
+                                        # Convert coordinates to integers
+                                        x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2)
+                                        
+                                        # Get color for this class
+                                        color = colors[class_id % len(colors)]
+                                        
+                                        # Draw bounding box with thick lines
+                                        thickness = 3
+                                        cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), color, thickness)
+                                        
+                                        # Prepare label text
+                                        label = f"{class_name} {confidence:.2f}"
+                                        
+                                        # Calculate text size
+                                        font = cv2.FONT_HERSHEY_SIMPLEX
+                                        font_scale = 0.7
+                                        text_thickness = 2
+                                        (text_width, text_height), baseline = cv2.getTextSize(
+                                            label, font, font_scale, text_thickness)
+                                        
+                                        # Position label above the box
+                                        label_x = x1
+                                        label_y = y1 - 10 if y1 > text_height + 10 else y2 + text_height + 10
+                                        
+                                        # Draw label background
+                                        bg_x1 = label_x - 2
+                                        bg_y1 = label_y - text_height - 2
+                                        bg_x2 = label_x + text_width + 2
+                                        bg_y2 = label_y + baseline + 2
+                                        
+                                        cv2.rectangle(annotated_frame, (bg_x1, bg_y1), (bg_x2, bg_y2), color, -1)
+                                        
+                                        # Draw label text
+                                        text_color = (255, 255, 255)  # White text
+                                        cv2.putText(annotated_frame, label, (label_x, label_y), 
+                                                font, font_scale, text_color, text_thickness)
+                                        
+                                        # CREATE DETECTION OBJECT FOR DATABASE AND ALERTS
+                                        detection_data = {
+                                            "bbox": [float(x1), float(y1), float(x2), float(y2)],
+                                            "confidence": confidence,
+                                            "class_id": class_id,
+                                            "class_name": class_name,
+                                            "timestamp": datetime.fromtimestamp(timestamp).isoformat(),
+                                            "model": self.model_id,
+                                            "session_id": self.session_id
+                                        }
+                                        detections.append(detection_data)
+                                        
+                                        # Store detection in database
+                                        try:
+                                            detection_create = DetectionCreate(
+                                                session_id=self.session_id,
+                                                camera_id=self.camera_id,
+                                                model_id=self.model_id,
+                                                bbox=[float(x1), float(y1), float(x2), float(y2)],
+                                                confidence=confidence,
+                                                class_id=class_id,
+                                                class_name=class_name,
+                                                frame_width=frame.shape[1],
+                                                frame_height=frame.shape[0],
+                                                frame_timestamp=datetime.fromtimestamp(timestamp),
+                                                inference_time=inference_time
+                                            )
+                                            
+                                            db_detection = DetectionService.create_detection(db, detection_create)
+                                            
+                                            # FIXED: SEND ALERT IF CONFIDENCE EXCEEDS THRESHOLD
+                                            if confidence > db_camera.alert_threshold:
+                                                self._send_alert(camera_manager, detection_data, frame, db, db_detection.id)
+                                                
+                                        except Exception as db_error:
+                                            logger.error(f"Failed to save detection: {db_error}")
+                        
+                        if detection_count > 0:
+                            logger.info(f"🎯 Drew {detection_count} bounding boxes directly on frame #{frame_count}")
+                        
+                        # Update session detections (for backward compatibility)
+                        self.detections = detections
                         
                         # Update session statistics
-                        SessionService.update_session_stats(
-                            db, self.session_id, 
-                            frames_processed=1, 
-                            processing_time=inference_time
-                        )
-                        
-                        # Update model statistics
-                        ModelService.update_model_stats(db, self.model_id, inference_time)
+                        try:
+                            SessionService.update_session_stats(
+                                db, self.session_id, 
+                                frames_processed=1, 
+                                processing_time=inference_time
+                            )
+                            ModelService.update_model_stats(db, self.model_id, inference_time)
+                        except Exception as stats_error:
+                            logger.error(f"Failed to update stats: {stats_error}")
                     
-                    # Update in-memory detections for backward compatibility
-                    self.detections = detections
+                    # Store the annotated frame
+                    with self.frame_lock:
+                        self.latest_annotated_frame = annotated_frame
+                    
+                    # Update camera manager with annotated frame
+                    camera_manager.camera_frames[f"{self.camera_id}_annotated"] = annotated_frame
                     
                     # Update central detection storage for backward compatibility
                     if not hasattr(camera_manager, 'camera_detections'):
                         camera_manager.camera_detections = {}
-                    camera_manager.camera_detections[self.camera_id] = detections
+                    camera_manager.camera_detections[self.camera_id] = self.detections
                     
                 else:
                     time.sleep(0.01)
                     
             except Exception as e:
-                logger.error(f"Error in detection session {self.session_id}: {e}")
+                logger.error(f"❌ Error in detection session {self.session_id}: {e}")
+                import traceback
+                logger.error(f"Traceback: {traceback.format_exc()}")
+                
                 # Log error to database
                 try:
                     with get_db_session() as db:
-                        # Increment local error count
                         self.error_count += 1
-                        
                         session_update = DetectionSessionUpdate(
                             last_error=str(e),
                             last_error_at=datetime.now(),
@@ -197,6 +578,62 @@ class DetectionSession:
                 except Exception as db_error:
                     logger.error(f"Failed to log error to database: {db_error}")
                 time.sleep(0.1)
+
+    # def _send_alert(self, camera_manager, detection, frame, db: Session, detection_id: int):
+    #     """Send an alert for this specific session with database storage"""
+    #     try:
+    #         # Crop the detection area
+    #         x1, y1, x2, y2 = map(int, detection["bbox"])
+    #         h, w = frame.shape[:2]
+    #         x1, y1 = max(0, x1), max(0, y1)
+    #         x2, y2 = min(w, x2), min(h, y2)
+            
+    #         detection_crop = frame[y1:y2, x1:x2] if x2 > x1 and y2 > y1 else frame
+            
+    #         # Encode cropped image
+    #         _, img_encoded = cv2.imencode('.jpg', detection_crop, [cv2.IMWRITE_JPEG_QUALITY, 85])
+    #         img_base64 = base64.b64encode(img_encoded.tobytes()).decode('utf-8')
+
+    #         # Create alert in database
+    #         alert_create = AlertCreate(
+    #             detection_id=detection_id,
+    #             session_id=self.session_id,
+    #             camera_id=self.camera_id,
+    #             model_id=self.model_id,
+    #             object_type=detection["class_name"],
+    #             confidence=detection["confidence"],
+    #             bbox=detection["bbox"],
+    #             image_data=img_base64,
+    #             image_size=len(img_base64)
+    #         )
+            
+    #         db_alert = AlertService.create_alert(db, alert_create)
+
+    #         alert_data = {
+    #             "id": db_alert.id,
+    #             "camera_id": self.camera_id,
+    #             "model": self.model_id,
+    #             "session_id": self.session_id,
+    #             "timestamp": detection["timestamp"],
+    #             "object_type": detection["class_name"],
+    #             "confidence": detection["confidence"],
+    #             "bbox": detection["bbox"],
+    #             "image_data": img_base64
+    #         }
+
+    #         logger.info(f"🚨 ALERT: {alert_data['object_type']} detected on camera {self.camera_id} "
+    #                    f"model {self.model_id} with {alert_data['confidence']:.1%} confidence")
+
+    #         # Broadcast alert to session-specific WebSocket clients
+    #         if camera_manager.loop:
+    #             asyncio.run_coroutine_threadsafe(
+    #                 self._broadcast_session_alert(camera_manager, alert_data),
+    #                 camera_manager.loop
+    #             )
+            
+    #     except Exception as e:
+    #         logger.error(f"Error sending alert for session {self.session_id}: {e}")
+
 
     def _send_alert(self, camera_manager, detection, frame, db: Session, detection_id: int):
         """Send an alert for this specific session with database storage"""
@@ -240,19 +677,25 @@ class DetectionSession:
                 "image_data": img_base64
             }
 
-            logger.info(f"🚨 ALERT: {alert_data['object_type']} detected on camera {self.camera_id} "
-                       f"model {self.model_id} with {alert_data['confidence']:.1%} confidence")
+            logger.info(f"🚨 ALERT CREATED: ID={db_alert.id} {alert_data['object_type']} detected on camera {self.camera_id} "
+                    f"model {self.model_id} with {alert_data['confidence']:.1%} confidence")
 
             # Broadcast alert to session-specific WebSocket clients
             if camera_manager.loop:
-                asyncio.run_coroutine_threadsafe(
-                    self._broadcast_session_alert(camera_manager, alert_data),
-                    camera_manager.loop
-                )
+                try:
+                    asyncio.run_coroutine_threadsafe(
+                        self._broadcast_session_alert(camera_manager, alert_data),
+                        camera_manager.loop
+                    )
+                    logger.info(f"Alert {db_alert.id} broadcasted to WebSocket clients")
+                except Exception as ws_error:
+                    logger.error(f"Failed to broadcast alert: {ws_error}")
             
         except Exception as e:
             logger.error(f"Error sending alert for session {self.session_id}: {e}")
-            
+            import traceback
+            logger.error(f"Alert error traceback: {traceback.format_exc()}")
+
     async def _broadcast_session_alert(self, camera_manager, alert_data):
         """Broadcast alert to WebSocket clients for this session"""
         alert_message = {
@@ -545,15 +988,18 @@ class CameraThread:
                 if len(pre_buffer) > pre_recording_frames_count:
                     pre_buffer.pop(0)
                 
-                # Queue frame for ALL active detection sessions for this camera
-                if self.camera.detection_enabled:
-                    sessions = self.camera_manager.multi_model_manager.get_camera_sessions(self.camera_id)
-                    for session in sessions:
-                        if session.active and not session.detection_queue.full():
-                            try:
-                                session.detection_queue.put_nowait((frame.copy(), current_time))
-                            except queue.Full:
-                                pass  # Skip if queue is full
+                # FIXED: Always queue frames to active sessions (remove detection_enabled check)
+                sessions = self.camera_manager.multi_model_manager.get_camera_sessions(self.camera_id)
+                if sessions:
+                    logger.debug(f"Queuing frame to {len(sessions)} sessions for camera {self.camera_id}")
+                    
+                for session in sessions:
+                    if session.active and not session.detection_queue.full():
+                        try:
+                            session.detection_queue.put_nowait((frame.copy(), current_time))
+                            logger.debug(f"Frame queued to session {session.session_id}")
+                        except queue.Full:
+                            logger.debug(f"Detection queue full for session {session.session_id}")
                 
                 # Handle recording with database integration
                 if self.camera.recording:
@@ -593,7 +1039,7 @@ class CameraThread:
             logger.error(f"Failed to update camera status in database: {db_error}")
         self.camera_manager.camera_status[self.camera_id] = "disconnected"
         logger.info(f"Camera thread {self.camera_id} stopped")
-    
+
     def _start_recording(self):
         """Start recording with database integration"""
         try:
@@ -784,6 +1230,8 @@ class CameraManager:
                 self.camera_threads[camera_id] = camera_thread
                 camera_thread.start()
     
+    # Fix for the time module conflict in start_tracking_session method
+
     async def start_tracking_session(self, camera_id: str, request: TrackingRequest):
         """Start a new tracking session with database integration"""
         if camera_id not in self.cameras:
@@ -797,7 +1245,8 @@ class CameraManager:
         session_id = request.session_id or request.pair_id or f"{camera_id}_{model_id}_{int(time.time())}"
         
         # Check if session already exists
-        if self.multi_model_manager.get_session(session_id):
+        existing_session = self.multi_model_manager.get_session(session_id)
+        if existing_session:
             logger.info(f"Session {session_id} already exists, reusing")
             return TrackingResponse(
                 session_id=session_id,
@@ -806,14 +1255,40 @@ class CameraManager:
                 message=f"Session already active"
             )
         
+        # Ensure camera is enabled and has a thread running
+        camera = self.cameras[camera_id]
+        if not camera.enabled:
+            logger.warning(f"Camera {camera_id} is disabled, enabling it")
+            try:
+                with get_db_session() as db:
+                    CameraService.update_camera(db, camera_id, CameraUpdate(enabled=True))
+                self.cameras[camera_id].enabled = True
+            except Exception as e:
+                logger.error(f"Failed to enable camera: {e}")
+        
+        # Start camera thread if not running
+        if camera_id not in self.camera_threads or not self.camera_threads[camera_id].thread.is_alive():
+            logger.info(f"Starting camera thread for {camera_id}")
+            camera_thread = CameraThread(camera_id, camera, self)
+            self.camera_threads[camera_id] = camera_thread
+            camera_thread.start()
+            
+            # Give camera thread time to initialize (FIXED: remove import time)
+            await asyncio.sleep(1)
+        
         # Create new detection session
         model_info = self.available_models[model_id]
+        logger.info(f"Creating detection session {session_id} with model {model_id} at {model_info['path']}")
+        
         session = self.multi_model_manager.create_session(
             camera_id, model_id, model_info["path"], session_id
         )
         
         # Start processing for this session
         session.start_processing(self)
+        
+        # Wait a moment for the thread to start (FIXED: remove import time)
+        await asyncio.sleep(0.5)
         
         # Enable detection for camera
         try:
@@ -823,7 +1298,7 @@ class CameraManager:
         except Exception as e:
             logger.error(f"Failed to update camera detection status: {e}")
         
-        logger.info(f"Started tracking session {session_id} for camera {camera_id} with model {model_id}")
+        logger.info(f"✅ Started tracking session {session_id} for camera {camera_id} with model {model_id}")
         
         return TrackingResponse(
             session_id=session_id,
@@ -831,7 +1306,8 @@ class CameraManager:
             model=model_id,
             message=f"Tracking started for camera {camera_id} with model {model_id}"
         )
-    
+
+
     async def stop_tracking_session(self, camera_id: str, model_id: str = None, session_id: str = None):
         """Stop a specific tracking session"""
         if camera_id not in self.cameras:
@@ -929,56 +1405,280 @@ class CameraManager:
             ]
         )
     
+
+    # def get_multi_model_stream_generator(self, camera_id: str, model_id: str = None, session_id: str = None):
+    #     """Enhanced frame generator with YOLO-style detection boxes and detailed debugging"""
+    #     if camera_id not in self.cameras:
+    #         raise HTTPException(status_code=404, detail=f"Camera {camera_id} not found")
+        
+    #     def generate():
+    #         frame_count = 0
+    #         last_debug_time = time.time()
+    #         sessions_found_count = 0
+            
+    #         while self.active:
+    #             frame_count += 1
+    #             current_time = time.time()
+                
+    #             if camera_id in self.camera_frames:
+    #                 # Get original frame
+    #                 frame = self.camera_frames[camera_id].copy()
+                    
+    #                 # Get sessions to display with enhanced debugging
+    #                 if session_id:
+    #                     session = self.multi_model_manager.get_session(session_id)
+    #                     sessions = [session] if session else []
+    #                     session_type = "specific_session"
+    #                 elif model_id:
+    #                     all_sessions = self.multi_model_manager.get_camera_sessions(camera_id)
+    #                     sessions = [s for s in all_sessions if s.model_id == model_id]
+    #                     session_type = "model_filtered"
+    #                 else:
+    #                     sessions = self.multi_model_manager.get_camera_sessions(camera_id)
+    #                     session_type = "all_sessions"
+                    
+    #                 # Enhanced debugging - log every 3 seconds instead of 5
+    #                 if current_time - last_debug_time > 3.0:
+    #                     # Debug session discovery
+    #                     all_sessions_debug = self.multi_model_manager.get_camera_sessions(camera_id)
+    #                     total_sessions_in_manager = len(self.multi_model_manager.detection_sessions)
+    #                     camera_sessions_mapping = self.multi_model_manager.camera_sessions.get(camera_id, [])
+                        
+    #                     # logger.info(f"📹 YOLO Stream frame {frame_count}: Found {len(sessions)} active sessions for camera {camera_id}")
+    #                     # logger.info(f"   Session type: {session_type}, model_id filter: {model_id}, session_id filter: {session_id}")
+    #                     # logger.info(f"   All sessions for camera: {len(all_sessions_debug)}")
+    #                     # logger.info(f"   Total sessions in manager: {total_sessions_in_manager}")
+    #                     # logger.info(f"   Camera sessions mapping: {camera_sessions_mapping}")
+                        
+    #                     if len(sessions) == 0 and len(all_sessions_debug) > 0:
+    #                         logger.warning(f"   ⚠️  Filter mismatch! All sessions: {[s.session_id for s in all_sessions_debug]}")
+    #                         for s in all_sessions_debug:
+    #                             logger.warning(f"      Session {s.session_id}: model={s.model_id}, active={s.active}")
+                        
+    #                     for i, session in enumerate(sessions):
+    #                         recent_count = sum(1 for det in session.detections 
+    #                                         if current_time - time.mktime(datetime.fromisoformat(det['timestamp']).timetuple()) < 2.0)
+    #                         logger.info(f"   Session {i+1}: {session.session_id} ({session.model_id}): {len(session.detections)} total, {recent_count} recent detections")
+                        
+    #                     last_debug_time = current_time
+    #                     sessions_found_count = len(sessions)
+                    
+    #                 # Collect all recent detections from all sessions
+    #                 all_detections = []
+    #                 total_boxes = 0
+                    
+    #                 for session in sessions:
+    #                     if not session.detections:
+    #                         continue
+                        
+    #                     # Filter recent detections (last 2 seconds for smooth display)
+    #                     recent_detections = [
+    #                         det for det in session.detections 
+    #                         if current_time - time.mktime(datetime.fromisoformat(det['timestamp']).timetuple()) < 2.0
+    #                     ]
+                        
+    #                     # Add model info to each detection for proper labeling
+    #                     for det in recent_detections:
+    #                         det_copy = det.copy()
+    #                         det_copy['model_id'] = session.model_id
+    #                         all_detections.append(det_copy)
+                        
+    #                     total_boxes += len(recent_detections)
+                    
+    #                 # Draw all detections using YOLO-style visualization
+    #                 if all_detections:
+    #                     frame = draw_yolo_detections(frame, all_detections)
+                        
+    #                     if frame_count % 30 == 0:  # Log every 30 frames
+    #                         logger.info(f"🎨 Drew {total_boxes} YOLO detection boxes on frame {frame_count}")
+    #                 elif sessions_found_count > 0 and frame_count % 60 == 0:  # Log when we have sessions but no detections
+    #                     logger.info(f"🔍 Frame {frame_count}: {sessions_found_count} sessions active but no recent detections to draw")
+                    
+    #                 # Add frame information overlay with session debug info
+    #                 frame_info = f"Frame: {frame_count} | Sessions: {len(sessions)} | Detections: {total_boxes}"
+    #                 cv2.putText(frame, frame_info, (10, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+                    
+    #                 # Add debug info if no sessions found
+    #                 if len(sessions) == 0 and frame_count % 30 == 0:
+    #                     debug_text = f"No active sessions found for camera {camera_id}"
+    #                     cv2.putText(frame, debug_text, (10, 55), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
+                    
+    #                 # Add timestamp
+    #                 timestamp_str = datetime.now().strftime("%H:%M:%S")
+    #                 cv2.putText(frame, timestamp_str, (10, frame.shape[0] - 10), 
+    #                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+                    
+    #                 # Encode frame as JPEG
+    #                 encode_params = [cv2.IMWRITE_JPEG_QUALITY, 90]  # Higher quality for better box visibility
+    #                 success, jpeg = cv2.imencode('.jpg', frame, encode_params)
+                    
+    #                 if success:
+    #                     yield (b'--frame\r\n'
+    #                         b'Content-Type: image/jpeg\r\n\r\n' + jpeg.tobytes() + b'\r\n')
+    #                 else:
+    #                     logger.error("Failed to encode frame")
+                        
+    #             else:
+    #                 # Generate placeholder frame when camera not available
+    #                 placeholder_frame = np.zeros((480, 640, 3), dtype=np.uint8)
+    #                 status_text = f"Camera {camera_id} not available"
+    #                 cv2.putText(placeholder_frame, status_text, (50, 240), 
+    #                         cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+                    
+    #                 _, jpeg = cv2.imencode('.jpg', placeholder_frame)
+    #                 yield (b'--frame\r\n'
+    #                     b'Content-Type: image/jpeg\r\n\r\n' + jpeg.tobytes() + b'\r\n')
+                
+    #             time.sleep(0.033)  # ~30 FPS
+        
+    #     return generate
+
     def get_multi_model_stream_generator(self, camera_id: str, model_id: str = None, session_id: str = None):
-        """Get frame generator with model-specific detections"""
+        """Enhanced detection stream with direct YOLO drawing on every frame"""
         if camera_id not in self.cameras:
             raise HTTPException(status_code=404, detail=f"Camera {camera_id} not found")
         
+        # Load the model for direct detection (use yolov8n as default)
+        target_model = None
+        target_model_id = model_id or "yolov8n"
+        
+        if target_model_id in self.available_models:
+            model_info = self.available_models[target_model_id]
+            target_model = self.multi_model_manager.load_model(target_model_id, model_info["path"])
+            logger.info(f"🎯 Detection stream using model {target_model_id} for camera {camera_id}")
+        else:
+            logger.warning(f"Model {target_model_id} not found, using yolov8n")
+            target_model = self.multi_model_manager.load_model("yolov8n", "./models/yolov8n.pt")
+            target_model_id = "yolov8n"
+        
         def generate():
+            frame_count = 0
+            last_log_time = time.time()
+            
+            # Detection colors (BGR format for OpenCV)
+            colors = [(0, 255, 0), (255, 0, 0), (0, 0, 255), (255, 255, 0), (255, 0, 255)]
+            
             while self.active:
+                frame_count += 1
+                current_time = time.time()
+                
                 if camera_id in self.camera_frames:
                     frame = self.camera_frames[camera_id].copy()
+                    detection_count = 0
                     
-                    # Get sessions to display
-                    if session_id:
-                        session = self.multi_model_manager.get_session(session_id)
-                        sessions = [session] if session else []
-                    elif model_id:
-                        all_sessions = self.multi_model_manager.get_camera_sessions(camera_id)
-                        sessions = [s for s in all_sessions if s.model_id == model_id]
+                    try:
+                        # Run YOLO detection directly on this frame
+                        start_time = time.time()
+                        results = target_model.predict(
+                            [frame], 
+                            conf=0.3,        # Confidence threshold
+                            iou=0.5,         # IoU threshold for NMS
+                            verbose=False,
+                            save=False,
+                            show=False
+                        )
+                        inference_time = time.time() - start_time
+                        
+                        # Draw detections directly on frame
+                        for result in results:
+                            boxes = result.boxes
+                            if boxes is not None and len(boxes) > 0:
+                                # Get detection data
+                                xyxy = boxes.xyxy.cpu().numpy()  # Bounding boxes
+                                conf = boxes.conf.cpu().numpy()  # Confidence scores
+                                cls = boxes.cls.cpu().numpy()    # Class IDs
+                                
+                                # Draw each detection
+                                for i in range(len(xyxy)):
+                                    x1, y1, x2, y2 = xyxy[i]
+                                    confidence = float(conf[i])
+                                    class_id = int(cls[i])
+                                    class_name = result.names[class_id]
+                                    
+                                    # Only draw confident detections
+                                    if confidence > 0.3:
+                                        detection_count += 1
+                                        
+                                        # Convert coordinates to integers
+                                        x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2)
+                                        
+                                        # Get color for this class
+                                        color = colors[class_id % len(colors)]
+                                        
+                                        # Draw bounding box with thick lines
+                                        cv2.rectangle(frame, (x1, y1), (x2, y2), color, 3)
+                                        
+                                        # Prepare label text
+                                        label = f"{class_name} {confidence:.2f} [{target_model_id}]"
+                                        
+                                        # Calculate text size and position
+                                        font = cv2.FONT_HERSHEY_SIMPLEX
+                                        font_scale = 0.6
+                                        text_thickness = 2
+                                        (text_width, text_height), baseline = cv2.getTextSize(
+                                            label, font, font_scale, text_thickness)
+                                        
+                                        # Position label above the box
+                                        label_y = y1 - 10 if y1 > text_height + 10 else y2 + text_height + 10
+                                        label_x = x1
+                                        
+                                        # Draw label background
+                                        bg_x1 = label_x - 2
+                                        bg_y1 = label_y - text_height - 2
+                                        bg_x2 = label_x + text_width + 2
+                                        bg_y2 = label_y + baseline + 2
+                                        
+                                        cv2.rectangle(frame, (bg_x1, bg_y1), (bg_x2, bg_y2), color, -1)
+                                        
+                                        # Draw label text in white
+                                        cv2.putText(frame, label, (label_x, label_y), 
+                                                font, font_scale, (255, 255, 255), text_thickness)
+                        
+                        # Log detection info every 3 seconds
+                        if current_time - last_log_time > 3.0:
+                            if detection_count > 0:
+                                logger.info(f"🎯 Live Detection: Frame {frame_count} - {detection_count} objects detected (inference: {inference_time:.3f}s)")
+                            else:
+                                logger.info(f"📹 Live Stream: Frame {frame_count} - No objects detected (inference: {inference_time:.3f}s)")
+                            last_log_time = current_time
+                        
+                    except Exception as e:
+                        logger.error(f"Detection error on frame {frame_count}: {e}")
+                        # Continue with original frame if detection fails
+                    
+                    # Add frame information overlay
+                    info_text = f"Frame: {frame_count} | Model: {target_model_id} | Detections: {detection_count}"
+                    cv2.putText(frame, info_text, (10, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+                    
+                    # Add detection status indicator
+                    if detection_count > 0:
+                        status_text = f"🎯 ACTIVE: {detection_count} objects detected"
+                        # cv2.putText(frame, status_text, (10, 55), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 2)
                     else:
-                        sessions = self.multi_model_manager.get_camera_sessions(camera_id)
-                    
-                    # Draw detections from selected sessions
-                    colors = [(0, 255, 0), (255, 0, 0), (0, 0, 255), (255, 255, 0), (255, 0, 255)]
-                    
-                    for i, session in enumerate(sessions):
-                        color = colors[i % len(colors)]
-                        for det in session.detections:
-                            x1, y1, x2, y2 = map(int, det["bbox"])
-                            cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
-                            
-                            # Add model label to distinguish between models
-                            label = f"{det['class_name']} {det['confidence']:.2f} [{session.model_id}]"
-                            cv2.putText(frame, label, (x1, y1 - 10), 
-                                      cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+                        status_text = "👁️ MONITORING"
+                        # cv2.putText(frame, status_text, (10, 55), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
                     
                     # Encode frame as JPEG
-                    _, jpeg = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
+                    _, jpeg = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
                     
                     yield (b'--frame\r\n'
-                           b'Content-Type: image/jpeg\r\n\r\n' + jpeg.tobytes() + b'\r\n')
+                        b'Content-Type: image/jpeg\r\n\r\n' + jpeg.tobytes() + b'\r\n')
+                    
                 else:
                     # Return black frame if camera not available
                     black_frame = np.zeros((480, 640, 3), dtype=np.uint8)
+                    cv2.putText(black_frame, f"Camera {camera_id} not available", (50, 240), 
+                            cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
                     _, jpeg = cv2.imencode('.jpg', black_frame)
                     yield (b'--frame\r\n'
-                           b'Content-Type: image/jpeg\r\n\r\n' + jpeg.tobytes() + b'\r\n')
+                        b'Content-Type: image/jpeg\r\n\r\n' + jpeg.tobytes() + b'\r\n')
                 
                 time.sleep(0.033)  # ~30 FPS
         
         return generate
+
     
+
     def get_cameras(self):
         """Get all configured cameras with their status from database"""
         try:
@@ -1346,11 +2046,13 @@ async def stop_tracking_model(camera_id: Union[int, str], request: dict):
 @app.get("/api/cameras/{camera_id}/detection_stream")
 async def stream_detection_video(
     camera_id: Union[int, str], 
-    model: str = None, 
+    model: str = "yolov8n",      # Default model parameter
     pair_id: str = None,
     session: str = None
 ):
-    """Stream processed detection frames with model-specific bounding boxes"""
+    """Stream processed detection frames with live YOLO detection"""
+    logger.info(f"🎬 Starting detection stream for camera {camera_id} with model {model}")
+    
     return StreamingResponse(
         camera_manager.get_multi_model_stream_generator(
             str(camera_id), model, pair_id or session
@@ -1362,6 +2064,7 @@ async def stream_detection_video(
             "Expires": "0"
         }
     )
+
 
 @app.get("/api/cameras/{camera_id}/stream")
 async def stream_camera(camera_id: Union[int, str]):
